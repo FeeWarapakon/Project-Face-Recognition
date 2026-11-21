@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>บทพูดนำเสนอโครงงาน 17 หน้า (Face_Recognition.pptx) | Raspberry Pi 5</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                        },
+                        speaker: {
+                            sanya: '#38bdf8',       // ฟ้า (สัญญา: หน้า 1-5)
+                            narawich: '#a855f7',    // ม่วง (นราวิชญ์: หน้า 6-11 สถาปัตยกรรม & P-R-O Net)
+                            warapakorn: '#f59e0b'   // ทอง/ส้ม (วราปกรณ์: หน้า 12-17 ขอบเขต & สรุป)
+                        },
+                        tech: {
+                            dark: '#080c14',
+                            card: '#111827',
+                            border: '#1f293d'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+                        outfit: ['Outfit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #070a11;
+            color: #e2e8f0;
+        }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.78);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-nav {
+            background: rgba(11, 15, 25, 0.90);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .gradient-text-cyan {
+            background: linear-gradient(135deg, #38bdf8 0%, #22c55e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .speech-quote {
+            position: relative;
+            background: rgba(15, 23, 42, 0.85);
+            border-left: 4px solid #38bdf8;
+        }
+        .speech-quote-purple {
+            border-left-color: #a855f7;
+        }
+        .speech-quote-gold {
+            border-left-color: #f59e0b;
+        }
+        .tele-text {
+            font-size: 1.35rem;
+            line-height: 2.25rem;
+            letter-spacing: 0.015em;
+        }
+        @media (min-width: 768px) {
+            .tele-text {
+                font-size: 1.55rem;
+                line-height: 2.6rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#070a11] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-black">
+
+    <!-- Top Navigation -->
+    <nav class="sticky top-0 z-50 glass-nav px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <a href="index.html" class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-emerald-500 to-green-500 flex items-center justify-center text-slate-950 font-bold text-lg shadow-lg shadow-cyan-500/20 hover:scale-105 transition-transform">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg leading-tight tracking-tight text-white flex items-center gap-2 font-outfit">
+                        Face_Recognition(2).pptx Script <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">17 Slides Complete</span>
+                    </h1>
+                    <p class="text-[11px] text-slate-400">บทพูดนำเสนอทีละหน้า 1-17 สไลด์ | สัญญา (1-5) &bull; นราวิชญ์ (6-11 MTCNN P-R-O Net) &bull; วราปกรณ์ (12-17)</p>
+                </div>
+            </div>
+
+            <!-- View Mode Switcher -->
+            <div class="flex items-center gap-2">
+                <div class="hidden sm:flex bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+                    <button onclick="setViewMode('slider')" id="btn-mode-slider" class="px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-desktop"></i> โหมดสไลด์ทีละหน้า (1-17)
+                    </button>
+                    <button onclick="setViewMode('teleprompter')" id="btn-mode-tele" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-microphone-lines"></i> Teleprompter ซ้อมพูด
+                    </button>
+                    <button onclick="setViewMode('qa')" id="btn-mode-qa" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-question"></i> แนวทางตอบคำถาม Q&A (P-R-O Net)
+                    </button>
+                </div>
+                <a href="index.html" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs border border-slate-700 flex items-center gap-1">
+                    <i class="fa-solid fa-house"></i> รายงานระบบ
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header Stats Banner -->
+    <header class="py-8 border-b border-slate-800/80 bg-gradient-to-b from-slate-900/60 to-transparent">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-2">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>PowerPoint Presentation: Face_Recognition(2).pptx (17 หน้า)</span>
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                        บทพูดนำเสนอโครงงาน: การพัฒนาระบบรู้จำใบหน้าบน <span class="gradient-text-cyan">Raspberry Pi 5</span>
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-400 mt-1">
+                        เป้าหมายสำคัญตามขอบเขต (ข้อ 8.4): <strong class="text-emerald-400 font-semibold">"ความแม่นยำในการรู้จำ (Accuracy) ไม่น้อยกว่าร้อยละ 90, Frame Rate &ge; 40 FPS, โมเดล &le; 5 MB"</strong>
+                    </p>
+                </div>
+
+                <!-- Speaker Distribution Chips -->
+                <div class="flex flex-wrap gap-2.5 text-xs">
+                    <div class="p-2.5 rounded-xl glass-card border border-cyan-500/30 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
+                        <div>
+                            <div class="font-bold text-white">สัญญา ลุงจาย</div>
+                            <div class="text-[10px] text-cyan-300">สไลด์ 1 – 5 (บทนำ, ปัญหา & ทางออก Edge AI)</div>
+                        </div>
+                    </div>
+                    <div class="p-2.5 rounded-xl glass-card border border-purple-500/30 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-purple-400"></span>
+                        <div>
+                            <div class="font-bold text-white">นราวิชญ์ อนุวงศ์</div>
+                            <div class="text-[10px] text-purple-300">สไลด์ 6 – 11 (สถาปัตยกรรม, MTCNN P-R-O Net, INT8)</div>
+                        </div>
+                    </div>
+                    <div class="p-2.5 rounded-xl glass-card border border-amber-500/30 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+                        <div>
+                            <div class="font-bold text-white">วราปกรณ์ พิมพ์วงษ์</div>
+                            <div class="text-[10px] text-amber-300">สไลด์ 12 – 17 (ขอบเขต >90%, แผนงาน, สรุป & Q&A)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 lg:px-8 py-8">
+
+        <!-- ============================================================== -->
+        <!-- MODE 1: SLIDE-BY-SLIDE PRESENTER VIEW (1 to 17 Slides) -->
+        <!-- ============================================================== -->
+        <section id="view-slider" class="space-y-8">
+            
+            <!-- Navigation Controls Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl glass-card border border-slate-800">
+                <div class="flex items-center gap-3">
+                    <button onclick="prevSlide()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-chevron-left"></i> หน้าก่อนหน้า
+                    </button>
+                    <span class="text-sm font-mono text-cyan-400 font-bold">
+                        Slide <span id="current-slide-num" class="text-lg text-white">1</span> / 17
+                    </span>
+                    <button onclick="nextSlide()" class="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all flex items-center gap-2">
+                        หน้าถัดไป <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <!-- Dropdown Jump -->
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="text-slate-400">ข้ามไปสไลด์ที่:</span>
+                    <select id="slide-jump-select" onchange="jumpToSlide(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg p-2 outline-none focus:border-cyan-500 font-mono">
+                        <!-- Populated by JS -->
+                    </select>
+                    <button onclick="copyCurrentScript()" id="btn-copy" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 flex items-center gap-1.5 border border-slate-700 transition-all">
+                        <i class="fa-regular fa-copy"></i> คัดลอกบทพูดหน้านี้
+                    </button>
+                </div>
+            </div>
+
+            <!-- Single Slide Active Display -->
+            <div id="slide-display-card" class="p-6 sm:p-8 rounded-3xl glass-card border border-slate-700/80 relative overflow-hidden transition-all duration-300">
+                <!-- Content will be injected by JavaScript -->
+            </div>
+
+            <!-- Thumbnails 1-17 Grid -->
+            <div class="mt-8">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-grip"></i> แถบเลือกสไลด์ทั้งหมด (17 หน้า)
+                </div>
+                <div id="thumbnails-container" class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-9 gap-2">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ============================================================== -->
+        <!-- MODE 2: TELEPROMPTER / FULL SCRIPT REHEARSAL -->
+        <!-- ============================================================== -->
+        <section id="view-teleprompter" class="hidden space-y-6">
+            <div class="p-5 rounded-2xl glass-card border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-slate-400">กรองตามผู้พูด:</span>
+                    <button onclick="filterTeleprompter('all')" class="px-3 py-1 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs tele-filter-btn active">ทั้งหมด (17 หน้า)</button>
+                    <button onclick="filterTeleprompter('sanya')" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs border border-cyan-500/30 tele-filter-btn">สัญญา (หน้า 1-5)</button>
+                    <button onclick="filterTeleprompter('narawich')" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs border border-purple-500/30 tele-filter-btn">นราวิชญ์ (หน้า 6-11 สถาปัตยกรรม & P-R-O Net)</button>
+                    <button onclick="filterTeleprompter('warapakorn')" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs border border-amber-500/30 tele-filter-btn">วราปกรณ์ (หน้า 12-17)</button>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center gap-2 font-mono">
+                    <i class="fa-solid fa-stopwatch text-emerald-400"></i> เวลารวมประมาณ: <strong class="text-white">8 - 10 นาที</strong>
+                </div>
+            </div>
+
+            <!-- Full Script Flow List -->
+            <div id="teleprompter-list" class="space-y-6">
+                <!-- Injected by JS -->
+            </div>
+        </section>
+
+
+        <!-- ============================================================== -->
+        <!-- MODE 3: Q&A COMMITTEE DEFENSE GUIDE -->
+        <!-- ============================================================== -->
+        <section id="view-qa" class="hidden space-y-6">
+            <div class="text-center max-w-2xl mx-auto mb-6">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/70 border border-amber-800/50 text-xs text-amber-300 mb-2">
+                    <i class="fa-solid fa-shield-halved"></i> Q&A Defense Guide
+                </div>
+                <h3 class="text-2xl font-bold text-white font-outfit">แนวทางตอบคำถามกรรมการยอดฮิต (เจาะลึก P-R-O Net & ขอบเขต 17 หน้า)</h3>
+                <p class="text-xs text-slate-400 mt-1">คำถามที่กรรมการมักจะถามเจาะลึก พร้อมคำตอบทางวิศวกรรมที่ถูกต้องและรัดกุม</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="qa-cards-container">
+                <!-- Injected by JS -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-20 py-10 bg-slate-950 border-t border-slate-800 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="font-semibold text-slate-300 text-sm mb-1">
+                โครงงานวิศวกรรมคอมพิวเตอร์: การพัฒนาระบบรู้จำใบหน้าบน Raspberry Pi 5
+            </div>
+            <p class="text-slate-400">
+                ผู้จัดทำ: นายสัญญา ลุงจาย (68543206057-0), นายนราวิชญ์ อนุวงศ์ (68543206118-0), นายวราปกรณ์ พิมพ์วงษ์ (68543206123-0) | ที่ปรึกษา: ผศ.สมนึก สุระธง
+            </p>
+            <div class="mt-3 text-slate-600 font-mono text-[11px]">
+                สอดคล้องกับไฟล์ Face_Recognition(2).pptx (17 สไลด์) | Accuracy &ge; 90% | MTCNN (P-Net, R-Net, O-Net) + MobileFaceNet INT8 + SQLite DB
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Data & Logic for 17 Slides -->
+    <script>
+        const slidesData17 = [
+            {
+                id: 1,
+                title: "หน้าปก: การพัฒนาระบบรู้จำใบหน้าบน Raspberry Pi 5",
+                subtitle: "ขับเคลื่อนด้วย MobileFaceNet และเทคนิคบีบอัดโมเดล INT8 Quantization",
+                speaker: "sanya",
+                speakerName: "สัญญา ลุงจาย",
+                speakerRole: "ผู้เปิดการนำเสนอโครงงาน",
+                duration: "40 วินาที",
+                image: "presentation_assets/slides_17/slide1.png",
+                keyPoints: [
+                    "กราบเรียนคณะกรรมการและอาจารย์ที่ปรึกษา ผศ.สมนึก สุระธง",
+                    "แนะนำชื่อโครงงานและสมาชิกทั้ง 3 ท่าน (สัญญา, นราวิชญ์, วราปกรณ์) อย่างเป็นทางการ"
+                ],
+                script: "กราบเรียนท่านคณะกรรมการผู้ทรงคุณวุฒิ และอาจารย์ที่ปรึกษา ผศ.สมนึก สุระธง ทุกท่านครับ\n\nกระผมนายสัญญา ลุงจาย พร้อมด้วย นายนราวิชญ์ อนุวงศ์ และ นายวราปกรณ์ พิมพ์วงษ์ ขอนำเสนอโครงงานวิศวกรรมคอมพิวเตอร์ ในหัวข้อ \"การพัฒนาระบบรู้จำใบหน้าบนอุปกรณ์ Raspberry Pi 5 ขับเคลื่อนด้วยโมเดล MobileFaceNet และเทคนิคบีบอัดโมเดล INT8 Quantization\" ครับ"
+            },
+            {
+                id: 2,
+                title: "ภาระต้นทุนของระบบ AI รูปแบบเดิม",
+                subtitle: "High Cost, Network Latency & Privacy Risks",
+                speaker: "sanya",
+                speakerName: "สัญญา ลุงจาย",
+                speakerRole: "ผู้เปิดการนำเสนอโครงงาน",
+                duration: "45 วินาที",
+                image: "presentation_assets/slides_17/slide2.png",
+                keyPoints: [
+                    "1. พึ่งพาทรัพยากรสูง (High Cost): ต้องใช้ GPU Server ราคาแพง",
+                    "2. ความหน่วงเวลา (Network Latency): ต้องส่งภาพไป-กลับ Cloud ไม่ Real-time",
+                    "3. ความเสี่ยงด้านข้อมูล (Privacy Risks): การส่งภาพใบหน้าออกภายนอกเสี่ยงข้อมูลรั่วไหล"
+                ],
+                script: "ในปัจจุบัน ระบบ AI รู้จำใบหน้ารูปแบบเดิมส่วนใหญ่มักประสบกับภาระและข้อจำกัด 3 ประการหลักครับ:\n\n1. พึ่งพาทรัพยากรสูง (High Cost): จำเป็นต้องใช้เครื่องเซิร์ฟเวอร์ GPU ราคาแพง ไม่เหมาะกับหน่วยงานขนาดเล็กที่มีงบประมาณจำกัด\n2. ความหน่วงเวลา (Network Latency): ต้องรอการส่งข้อมูลภาพไป-กลับระหว่าง Cloud ทำให้ระบบมีความหน่วงและไม่สามารถตอบสนองแบบ Real-time ได้อย่างราบรื่น\n3. ความเสี่ยงด้านข้อมูลส่วนบุคคล (Privacy Risks): การส่งภาพใบหน้าออกสู่เครือข่ายภายนอก เสี่ยงต่อการถูกดักจับและข้อมูลชีวมิติรั่วไหลครับ"
+            },
+            {
+                id: 3,
+                title: "ทางออก: เปลี่ยนผ่านสู่ On-Device Processing (Edge AI)",
+                subtitle: "Low Cost, Zero Latency & Absolute Privacy บน Raspberry Pi 5",
+                speaker: "sanya",
+                speakerName: "สัญญา ลุงจาย",
+                speakerRole: "ผู้เปิดการนำเสนอโครงงาน",
+                duration: "45 วินาที",
+                image: "presentation_assets/slides_17/slide3.png",
+                keyPoints: [
+                    "ประหยัดต้นทุน (Low Cost): ตัดค่าใช้จ่าย Server/Cloud",
+                    "ตอบสนองทันที (Zero Latency): ประมวลผลเสร็จสิ้น ณ จุดเกิดเหตุ",
+                    "ปลอดภัย 100% (Absolute Privacy): ภาพใบหน้าไม่เคยออกจากอุปกรณ์"
+                ],
+                script: "ทางออกของปัญหาคือการเปลี่ยนผ่านสู่ On-Device Processing หรือ Edge AI โดยประมวลผลระบบปัญญาประดิษฐ์บนอุปกรณ์ขนาดเล็กอย่าง Raspberry Pi 5 โดยตรง และตัดการพึ่งพา Cloud ออกไป 100% ครับ\n\nจุดเด่นสำคัญคือ:\n1. ประหยัดต้นทุน (Low Cost): ตัดค่าใช้จ่ายด้านเซิร์ฟเวอร์ราคาแพง\n2. ตอบสนองทันที (Zero Latency): ประมวลผลเสร็จสิ้น ณ จุดติดตั้งทันที\n3. ปลอดภัย 100% (Absolute Privacy): ข้อมูลภาพใบหน้าไม่เคยถูกส่งออกจากตัวเครื่องครับ"
+            },
+            {
+                id: 4,
+                title: "ความท้าทายทางวิศวกรรม: ทรัพยากรที่จำกัด",
+                subtitle: "ความซับซ้อนของ Deep Learning vs ข้อจำกัดฮาร์ดแวร์ Raspberry Pi 5",
+                speaker: "sanya",
+                speakerName: "สัญญา ลุงจาย",
+                speakerRole: "ผู้เปิดการนำเสนอโครงงาน",
+                duration: "40 วินาที",
+                image: "presentation_assets/slides_17/slide4.png",
+                keyPoints: [
+                    "Deep Learning ทั่วไปต้องการ GPU และ RAM มหาศาล",
+                    "Raspberry Pi 5 เป็นคอมพิวเตอร์ขนาดเล็ก ไม่มี GPU แยก RAM จำกัด",
+                    "โจทย์หลัก: ทำอย่างไรให้ AI แม่นยำสูง ลื่นไหล บน CPU/RAM ที่จำกัด"
+                ],
+                script: "อย่างไรก็ตาม การประมวลผลบน Edge Device ต้องเผชิญกับความท้าทายทางวิศวกรรมที่สำคัญครับ เพราะโมเดล Deep Learning ทั่วไปต้องการ GPU เฉพาะทางและ RAM มหาศาล แต่ Raspberry Pi 5 เป็นคอมพิวเตอร์บอร์ดเดี่ยวขนาดเล็กที่มีทรัพยากรจำกัด\n\nโจทย์หลักของพวกเราคือ: \"ทำอย่างไรจึงจะนำระบบ AI ที่มีความแม่นยำสูง มาบีบอัดและปรับแต่งให้ทำงานได้อย่างลื่นไหล ภายใต้ข้อจำกัดด้าน CPU และ RAM ของ Raspberry Pi 5 ครับ?\""
+            },
+            {
+                id: 5,
+                title: "สรุปแนวทาง: พัฒนาด้วย MobileFaceNet และ Quantization",
+                subtitle: "Our Solution: MobileFaceNet + Quantization Technology",
+                speaker: "sanya",
+                speakerName: "สัญญา ลุงจาย",
+                speakerRole: "ผู้เปิดการนำเสนอโครงงาน",
+                duration: "25 วินาที",
+                image: "presentation_assets/slides_17/slide5.png",
+                keyPoints: [
+                    "เลือกใช้โมเดลโครงสร้างเบา MobileFaceNet",
+                    "ผสานเทคโนโลยี INT8 Quantization",
+                    "ส่งต่อให้ นายนราวิชญ์ อธิบายสถาปัตยกรรมระบบ"
+                ],
+                script: "เพื่อตอบโจทย์ดังกล่าว กลุ่มของพวกเราจึงได้พัฒนาระบบรู้จำใบหน้าด้วยโมเดลสถาปัตยกรรมโครงสร้างเบา \"MobileFaceNet\" ร่วมกับเทคโนโลยีการบีบอัดโมเดล \"INT8 Quantization\" ครับ\n\nลำดับต่อไป นายนราวิชญ์ อนุวงศ์ จะขออธิบายในส่วนของสถาปัตยกรรมระบบ โครงข่าย MTCNN P-R-O Net และการประมวลผลเวกเตอร์ครับ"
+            },
+            {
+                id: 6,
+                title: "สถาปัตยกรรมระบบ (System Architecture)",
+                subtitle: "กระบวนการลงทะเบียน (Enrollment) และ กระบวนการรู้จำ (Recognition)",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "50 วินาที",
+                image: "presentation_assets/slides_17/slide6.png",
+                keyPoints: [
+                    "เปลี่ยนผู้พูดเป็น นายนราวิชญ์ อนุวงศ์",
+                    "1. กระบวนการลงทะเบียน (Enrollment): อัปโหลดภาพ &rarr; MTCNN &rarr; MobileFaceNet &rarr; Local Database",
+                    "2. กระบวนการรู้จำ (Recognition): กล้อง &rarr; MTCNN &rarr; MobileFaceNet &rarr; Cosine Similarity &rarr; ระบุตัวตน / Unknown"
+                ],
+                script: "กระผมนายนราวิชญ์ อนุวงศ์ ขออธิบายสถาปัตยกรรมระบบ ซึ่งแบ่งออกเป็น 2 กระบวนการหลักครับ:\n\n1. กระบวนการลงทะเบียน (Enrollment): เมื่ออัปโหลดภาพใบหน้าเข้าสู่ระบบ โมเดล MTCNN จะตรวจจับใบหน้า ส่งต่อไปยัง MobileFaceNet เพื่อสกัดเป็นเวกเตอร์ แล้วบันทึกลงฐานข้อมูลภายในอุปกรณ์ (Local Database)\n\n2. กระบวนการรู้จำ (Recognition): กล้องจะจับภาพสด &rarr; ส่งให้ MTCNN ตรวจจับ &rarr; MobileFaceNet สกัดเวกเตอร์ &rarr; คำนวณ Cosine Similarity เทียบกับฐานข้อมูล เพื่อระบุว่าเป็นบุคคลที่ลงทะเบียนไว้ หรือเป็นบุคคลที่ไม่รู้จัก (Unknown) ครับ"
+            },
+            {
+                id: 7,
+                title: "Step 1: การตรวจจับและจัดแนวด้วย MTCNN (P-Net &bull; R-Net &bull; O-Net)",
+                subtitle: "Raw Input &rarr; Facial Landmarks (5 จุด) &rarr; Face Alignment (112x112)",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "65 วินาที",
+                image: "presentation_assets/slides_17/slide7.png",
+                keyPoints: [
+                    "MTCNN ทำงานเรียงกัน 3 ลำดับขั้น (P-Net &bull; R-Net &bull; O-Net):",
+                    "1. P-Net (Proposal Net): FCN สแกน Image Pyramid สร้าง Candidate Boxes อย่างรวดเร็ว",
+                    "2. R-Net (Refine Net): กรอง False Positives ตัดกรอบที่ไม่ใช่หน้าออก และทำ NMS ปรับขนาด 24x24",
+                    "3. O-Net (Output Net): โครงข่ายลึกขนาด 48x48 ยืนยันกรอบสุดท้าย + สกัด 5 จุด Facial Landmarks",
+                    "Face Alignment: หมุนปรับระนาบหน้าเอียงให้ตั้งตรงขนาด 112x112 เพื่อความแม่นยำสูงสุด"
+                ],
+                script: "ในขั้นตอนที่ 1 ระบบใช้โมเดล MTCNN (Multi-task Cascaded Convolutional Networks) ซึ่งทำงานแบบ Cascaded 3 ลำดับขั้น หรือ \"P-R-O Net\" อย่างเป็นระบบครับ:\n\n1. P-Net (Proposal Network): เป็น Fully Convolutional Network ทำการสแกนภาพหลายสเกล (Image Pyramid) เพื่อสร้างกรอบ Candidate Bounding Boxes ที่มีโอกาสเป็นใบหน้านับร้อยจุดอย่างรวดเร็ว\n2. R-Net (Refine Network): รับภาพขนาด 24x24 เพื่อกรอง False Positives (วัตถุที่ไม่ใช่ใบหน้า) ทิ้งไป ทำ Non-Maximum Suppression (NMS) และปรับกรอบให้กระชับขึ้น\n3. O-Net (Output Network): เป็นโครงข่ายที่ซับซ้อนที่สุด รับภาพ 48x48 เพื่อยืนยันตำแหน่งใบหน้าขั้นสุดท้าย พร้อมตรวจจับพิกัด 5 จุดสำคัญ (Facial Landmarks) ได้แก่ ตาซ้าย, ตาขวา, จมูก, มุมปากซ้าย และมุมปากขวา\n\nจากนั้นระบบจะทำ Face Alignment หมุนปรับระนาบใบหน้าที่เอียงให้ตั้งตรง และตัดภาพให้ได้ขนาด 112x112 พิกเซล พอดี ทำให้โมเดลขั้นต่อไปมีความแม่นยำสูงขึ้นกว่า 18% ครับ"
+            },
+            {
+                id: 8,
+                title: "Step 2: สกัดจุดเด่นใบหน้าด้วย MobileFaceNet",
+                subtitle: "Aligned Face Image &rarr; Face Embedding (เวกเตอร์ตัวเลข) &rarr; Secure Storage",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "50 วินาที",
+                image: "presentation_assets/slides_17/slide8.png",
+                keyPoints: [
+                    "แปลงภาพพิกเซลเป็นเวกเตอร์ตัวเลข (Face Embedding)",
+                    "ระบบไม่เก็บภาพถ่ายจริง ทำให้ข้อมูลส่วนบุคคลปลอดภัยสูงสุด",
+                    "MobileFaceNet มีพารามิเตอร์น้อยกว่า 1 ล้านตัว เล็ก เร็ว แต่แม่นยำสูงระดับสากล"
+                ],
+                script: "ในขั้นตอนที่ 2 โมเดล MobileFaceNet จะรับภาพที่จัดแนวแล้วมาแปลงโครงสร้างใบหน้าให้ออกมาเป็นเวกเตอร์ตัวเลขในมิติสูง หรือ \"Face Embedding\"\n\nเหตุผลสำคัญที่เลือกใช้ MobileFaceNet คือ:\n- ออกแบบมาโดยเฉพาะสำหรับระบบฝังตัว มีพารามิเตอร์น้อยกว่า 1 ล้านตัว\n- มีขนาดเล็กและประมวลผลได้เร็วกว่าโครงข่ายทั่วไปมาก แต่ยังคงความแม่นยำสูงระดับสากล\n- และที่สำคัญ ระบบจะจัดเก็บเฉพาะเวกเตอร์ตัวเลข ไม่มีการเก็บภาพถ่ายใบหน้าจริง ทำให้ข้อมูลส่วนบุคคลปลอดภัยสูงสุดครับ"
+            },
+            {
+                id: 9,
+                title: "Step 3: การวิเคราะห์และตัดสินผล (Cosine Similarity)",
+                subtitle: "Cosine Similarity, Thresholding & Known/Unknown Boundary",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "45 วินาที",
+                image: "presentation_assets/slides_17/slide9.png",
+                keyPoints: [
+                    "คำนวณความคล้ายคลึงระหว่างเวกเตอร์จากกล้องกับเวกเตอร์ในฐานข้อมูล",
+                    "คะแนน &ge; ค่า Threshold &rarr; ระบุตัวตนสำเร็จ (Match)",
+                    "คะแนน < ค่า Threshold &rarr; บุคคลที่ไม่รู้จัก (Unknown)",
+                    "ค่า Threshold ถูกปรับตั้งค่าอย่างเป็นกลางเพื่อหลีกเลี่ยงอคติ"
+                ],
+                script: "ในขั้นตอนที่ 3 ระบบจะนำเวกเตอร์ที่ได้จากกล้องมาเปรียบเทียบกับเวกเตอร์ในฐานข้อมูลด้วยสมการ \"Cosine Similarity\"\n\n- หากคะแนนความคล้ายคลึง มากกว่าหรือเท่ากับ ค่า Threshold ที่กำหนด ระบบจะตัดสินว่า \"ระบุตัวตนสำเร็จ (Match)\" พร้อมแสดงชื่อบุคคล\n- หากคะแนน น้อยกว่า ค่า Threshold ระบบจะระบุว่าเป็น \"บุคคลที่ไม่รู้จัก (Unknown)\" ทันที โดยค่า Threshold นี้ถูกคำนวณและปรับตั้งค่าอย่างเหมาะสมเพื่อความแม่นยำสูงสุดครับ"
+            },
+            {
+                id: 10,
+                title: "หัวใจของการรีดประสิทธิภาพ: INT8 Quantization",
+                subtitle: "ตารางเปรียบเทียบ FP32 (ทศนิยม 32 บิต) vs INT8 (จำนวนเต็ม 8 บิต)",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "50 วินาที",
+                image: "presentation_assets/slides_17/slide10.png",
+                keyPoints: [
+                    "ขนาดไฟล์โมเดล: INT8 เล็กลงสูงสุด 4 เท่า (จาก 13.3 MB เหลือ 3.45 MB)",
+                    "การใช้ RAM: INT8 ต่ำมาก เหมาะสำหรับ Raspberry Pi 5",
+                    "ความเร็ว: INT8 เร็วขึ้นอย่างมากด้วยการคำนวณจำนวนเต็ม",
+                    "ความแม่นยำ: สูญเสียความแม่นยำเพียงเล็กน้อย (ไม่เกิน 0.15%)"
+                ],
+                script: "หัวใจสำคัญในการรีดประสิทธิภาพบน Raspberry Pi 5 คือเทคนิค Post-Training INT8 Quantization โดยแปลงค่าน้ำหนักจากทศนิยม 32 บิต (FP32) มาเป็นจำนวนเต็ม 8 บิต (INT8)\n\nจากตารางเปรียบเทียบ:\n- ขนาดไฟล์โมเดล: เล็กลงสูงสุดถึง 4 เท่า (ลดลง 74% เหลือ 3.45 MB)\n- การใช้ RAM: ลดลงอย่างมาก เหลือเพียง ~48 MB\n- ความเร็ว: ประมวลผลได้เร็วกว่าเดิมกว่า 3.3 เท่า\n- ความแม่นยำ: ลดลงเพียงเล็กน้อยมาก ซึ่งผลกระทบต่อความแม่นยำนี้เป็นจุดโฟกัสสำคัญของการทดลองในโครงงานนี้ครับ"
+            },
+            {
+                id: 11,
+                title: "ตัวชี้วัดและวัตถุประสงค์การทดลอง",
+                subtitle: "เปรียบเทียบ FP32 vs INT8 บน Raspberry Pi 5 ใน 4 มิติหลัก",
+                speaker: "narawich",
+                speakerName: "นราวิชญ์ อนุวงศ์",
+                speakerRole: "หัวหน้ากลุ่มโครงงาน / สถาปัตยกรรมระบบ",
+                duration: "45 วินาที",
+                image: "presentation_assets/slides_17/slide11.png",
+                keyPoints: [
+                    "1. ความถูกต้อง (Accuracy): วัดอัตราความสำเร็จในการรู้จำเทียบกับฐานข้อมูล",
+                    "2. ความเร็ว (Inference Time): วัดระยะเวลาเฉลี่ยและ Frame Rate (FPS)",
+                    "3. ขนาดโมเดล (Model Size): วัดพื้นที่จัดเก็บข้อมูล (MB) ที่ลดลง",
+                    "4. ทรัพยากร (RAM Usage): วัดปริมาณหน่วยความจำหลักที่ใช้ขณะรันไทม์",
+                    "ส่งต่อให้ นายวราปกรณ์ อธิบายขอบเขตโครงงาน"
+                ],
+                script: "วัตถุประสงค์การทดลองคือการเปรียบเทียบประสิทธิภาพระหว่างโมเดล FP32 และ INT8 บนฮาร์ดแวร์ Raspberry Pi 5 เดียวกัน ใน 4 มิติหลักครับ:\n\n1. ความถูกต้อง (Accuracy): วัดอัตราความสำเร็จในการรู้จำบุคคล\n2. ความเร็ว (Inference Time): วัดเวลาในการประมวลผลต่อภาพและค่า FPS\n3. ขนาดโมเดล (Model Size): วัดพื้นที่จัดเก็บข้อมูล (MB)\n4. ทรัพยากร (RAM Usage): วัดปริมาณหน่วยความจำ RAM ที่ระบบใช้งานจริงครับ\n\nลำดับต่อไป นายวราปกรณ์ พิมพ์วงษ์ จะขออธิบายในส่วนของขอบเขตโครงงาน แผนการดำเนินงาน และประโยชน์ที่ได้รับครับ"
+            },
+            {
+                id: 12,
+                title: "ขอบเขตโครงงาน",
+                subtitle: "Scope of Project (Session Transition)",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "20 วินาที",
+                image: "presentation_assets/slides_17/slide12.png",
+                keyPoints: [
+                    "เปลี่ยนผู้พูดเป็น นายวราปกรณ์ พิมพ์วงษ์",
+                    "เกริ่นนำเข้าสู่ขอบเขตโครงงาน ข้อกำหนด และแผนการดำเนินงาน"
+                ],
+                script: "กระผมนายวราปกรณ์ พิมพ์วงษ์ ขอรับหน้าที่อธิบายในส่วนของขอบเขตโครงงาน แผนการดำเนินงาน และประโยชน์ที่คาดว่าจะได้รับครับ"
+            },
+            {
+                id: 13,
+                title: "ขอบเขตของโครงงาน (ข้อ 8.1 - 8.4)",
+                subtitle: "Target Hardware, Web App, Database & Accuracy >= 90%",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "60 วินาที",
+                image: "presentation_assets/slides_17/slide13.png",
+                keyPoints: [
+                    "8.1 ฮาร์ดแวร์: Raspberry Pi 5 (ARM64) 1 ชุด, MobileFaceNet, ภาพหน้าตรง 3 ภาพ/คน จำนวน 20 คน, กล้อง USB Webcam 1080p, MTCNN ครอป 112x112",
+                    "8.2 เว็บแอปพลิเคชัน: พัฒนาระบบลงทะเบียนและดูกล้องสดผ่านหน้าเว็บ",
+                    "8.3 ฐานข้อมูล: จัดเก็บ Face Embedding ในฐานข้อมูล PostgreSQL/SQLite (localhost) แสดงผลบุคคลที่ลงทะเบียน/Unknown",
+                    "8.4 เป้าหมายความแม่นยำและประสิทธิภาพ: ความแม่นยำ (Accuracy) ไม่น้อยกว่าร้อยละ 90, Frame Rate เฉลี่ยไม่น้อยกว่า 40 FPS, ขนาดโมเดลไม่เกิน 5 MB"
+                ],
+                script: "ขอบเขตของโครงงานในส่วนข้อ 8.1 ถึง 8.4 มีรายละเอียดดังนี้ครับ:\n\n- 8.1 ฮาร์ดแวร์และข้อมูล: พัฒนาระบบบน Raspberry Pi 5 (Linux ARM64) จำนวน 1 ชุด ใช้ภาพใบหน้าหน้าตรง 3 ภาพต่อคน จำนวน 20 คน ใช้กล้อง USB Webcam 1080p และครอบตัดภาพ 112x112 ด้วย MTCNN\n- 8.2 เว็บแอป: มีระบบลงทะเบียนใบหน้าและดูภาพกล้องสดผ่านหน้าเว็บแอปพลิเคชัน\n- 8.3 ฐานข้อมูล: จัดเก็บ Face Embedding ในฐานข้อมูลแบบ Localhost เพื่อแยกแยะบุคคลที่ลงทะเบียนและ Unknown\n- 8.4 เป้าหมายตัวชี้วัดความสำเร็จ:\n  1. \"ความแม่นยำในการรู้จำ (Accuracy) ไม่น้อยกว่าร้อยละ 90\"\n  2. อัตราการแสดงผลภาพ (Frame Rate) เฉลี่ยไม่น้อยกว่า 40 เฟรมต่อวินาที (FPS)\n  3. ขนาดโมเดลลดลงเหลือไม่เกิน 5 MB ครับ"
+            },
+            {
+                id: 14,
+                title: "ขอบเขตของโครงงาน (ต่อ) (ข้อ 8.5 - 8.6)",
+                subtitle: "Environment Conditions & Operational Limitations",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "50 วินาที",
+                image: "presentation_assets/slides_17/slide14.png",
+                keyPoints: [
+                    "8.5 สภาพแวดล้อม: ภายในอาคาร (Indoor) แสงคงที่ ไม่มีแสงจ้า/เงาสะท้อน, ระบุทีละ 1 ใบหน้า, ระยะ 0.5-1.5 เมตร, เวลาประมวลผลไม่เกิน 5 วินาที",
+                    "8.6 ข้อจำกัด: ไม่รองรับการตรวจจับการปลอมแปลงใบหน้า (Anti-spoofing เช่น ภาพถ่าย, วิดีโอ, หน้ากาก, Deepfake)",
+                    "สรุปขอบเขต: Raspberry Pi 5 + Webcam 1080p + MobileFaceNet + Local DB + Web App"
+                ],
+                script: "ขอบเขตของโครงงานในส่วนข้อ 8.5 และ 8.6 ได้แก่:\n\n- 8.5 สภาพแวดล้อมการทำงาน: ออกแบบเพื่อทำงานภายในอาคาร (Indoor) ที่มีสภาพแสงคงที่ ไม่มีเงาสะท้อนรบกวน ระบุใบหน้าทีละ 1 ใบหน้า ในระยะห่างจากกล้อง 0.5 ถึง 1.5 เมตร และใช้เวลาประมวลผลรวมไม่เกิน 5 วินาที\n\n- 8.6 ข้อจำกัดของโครงงาน: ระบบในระยะนี้ไม่รองรับการตรวจจับการปลอมแปลงใบหน้า (Anti-spoofing) เช่น การนำภาพถ่าย คลิปวิดีโอ หรือหน้ากากมาหลอกสแกนครับ\n\nสรุปขอบเขตคือ ระบบทำงานครบวงจรบน Raspberry Pi 5 ร่วมกับกล้อง 1080p, MobileFaceNet, ฐานข้อมูล Localhost และ Web Application ครับ"
+            },
+            {
+                id: 15,
+                title: "วิธีการดำเนินโครงงาน (Gantt Chart)",
+                subtitle: "Project Timeline & Action Plan (พ.ศ. 2569 ก.ค. 69 - เม.ย. 70)",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "35 วินาที",
+                image: "presentation_assets/slides_17/slide15.png",
+                keyPoints: [
+                    "แผนการดำเนินงาน 6 ขั้นตอนตลอดปีการศึกษา 2569",
+                    "1. เสนอโครงงาน &rarr; 2. ศึกษาเอกสาร &rarr; 3. ดำเนินงาน &rarr; 4. เก็บรวบรวมข้อมูล &rarr; 5. สรุปผล &rarr; 6. จัดทำรายงาน"
+                ],
+                script: "สำหรับแผนการดำเนินโครงงาน ได้แบ่งระยะเวลาดำเนินงานออกเป็น 6 ขั้นตอนหลักตลอดปีการศึกษา 2569:\n1. เสนอหัวข้อโครงงานเพื่อขออนุมัติ\n2. ศึกษาเอกสารและงานวิจัยที่เกี่ยวข้อง\n3. ดำเนินการพัฒนาระบบตามสถาปัตยกรรมที่ออกแบบไว้\n4. เก็บรวบรวมข้อมูลและทำการทดสอบระบบ\n5. สรุปผลการดำเนินงานและวิเคราะห์ประสิทธิภาพ\n6. จัดทำรายงานโครงงานฉบับสมบูรณ์ครับ"
+            },
+            {
+                id: 16,
+                title: "ประโยชน์ที่คาดว่าจะได้รับ (Expected Benefits)",
+                subtitle: "On-Device System, INT8 Methodology, Performance Benchmark, Access Control",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "50 วินาที",
+                image: "presentation_assets/slides_17/slide16.png",
+                keyPoints: [
+                    "1. ระบบรู้จำใบหน้าแบบ On-Device บน RPi 5 ไม่ต้องพึ่งพา Cloud",
+                    "2. แนวทางเทคนิค MobileFaceNet & INT8 Quantization สำหรับอุปกรณ์ทรัพยากรจำกัด",
+                    "3. ผลเปรียบเทียบประสิทธิภาพ FP32 vs INT8 เชิงลึก (ความถูกต้อง, Latency, ขนาด, RAM)",
+                    "4. ต้นแบบระบบควบคุม/บันทึกเวลา (Access Control & Time Attendance) ปลอดภัยต่อข้อมูลส่วนบุคคล"
+                ],
+                script: "ประโยชน์หลัก 4 ประการที่คาดว่าจะได้รับจากโครงงานนี้ ได้แก่:\n\n1. ได้ระบบรู้จำใบหน้าแบบ On-Device บน Raspberry Pi 5 ที่ระบุตัวตนได้โดยตรง ไม่ต้องพึ่งพา Cloud Server ภายนอก\n2. ได้แนวทางเชิงปฏิบัติในการนำโมเดล MobileFaceNet และเทคนิค INT8 Quantization มาใช้งานจริงบนอุปกรณ์ที่มีทรัพยากรจำกัด\n3. ได้ผลการวิเคราะห์เปรียบเทียบประสิทธิภาพเชิงลึกระหว่าง FP32 และ INT8 ทั้งด้านความถูกต้อง ระยะเวลา ขนาดโมเดล และการใช้ RAM\n4. ได้ต้นแบบระบบควบคุมการเข้า-ออก (Access Control) และระบบบันทึกเวลาทำงานที่เคารพความเป็นส่วนตัวและคุ้มครองข้อมูลส่วนบุคคลอย่างปลอดภัยครับ"
+            },
+            {
+                id: 17,
+                title: "THANK YOU & Q & A",
+                subtitle: "Questions and Answers Session",
+                speaker: "warapakorn",
+                speakerName: "วราปกรณ์ พิมพ์วงษ์",
+                speakerRole: "สมาชิกกลุ่มโครงงาน",
+                duration: "25 วินาที",
+                image: "presentation_assets/slides_17/slide17.png",
+                keyPoints: [
+                    "กล่าวขอบคุณท่านคณะกรรมการและผู้รับฟังทุกท่าน",
+                    "เปิดรับคำแนะนำและตอบข้อซักถาม Q&A"
+                ],
+                script: "กลุ่มของพวกเราขอจบการนำเสนอโครงงานวิศวกรรมคอมพิวเตอร์เพียงเท่านี้ครับ\n\nขอขอบพระคุณท่านคณะกรรมการทุกท่านและอาจารย์ที่ปรึกษาเป็นอย่างสูงครับ และพวกเราพร้อมรับฟังคำแนะนำและตอบข้อซักถามแล้วครับ ขอบคุณครับ"
+            }
+        ];
+
+        // Q&A Defense Guide tailored to 17 slides deck with Deep-Dive on P-R-O Net
+        const qaData17 = [
+            {
+                q: "1. สรุปการทำงานของ MTCNN (P-Net, R-Net, O-Net) แต่ละขั้นทำหน้าที่อะไร ทำไมต้องมี 3 ชั้น?",
+                a: "MTCNN ใช้โครงสร้างแบบ Cascaded 3 ลำดับขั้นเพื่อบาลานซ์ระหว่าง 'ความเร็ว' และ 'ความแม่นยำ' ครับ:\n• P-Net (Proposal Network): เป็น Fully Convolutional Network สแกนภาพ multi-scale ขนาด 12x12 อย่างรวดเร็ว เพื่อคัดกรองกรอบ Candidate Bounding Boxes นับร้อยจุดที่มีโอกาสเป็นใบหน้า\n• R-Net (Refine Network): รับภาพขนาด 24x24 จาก P-Net มากรอง False Positives (วัตถุที่ไม่ใช่ใบหน้า) ออกไป ทำ Non-Maximum Suppression (NMS) และปรับกรอบให้ชิดขึ้น\n• O-Net (Output Network): เป็นโครงข่ายที่ลึกและซับซ้อนที่สุด รับภาพ 48x48 เพื่อยืนยัน Bounding Box ขั้นสุดท้าย พร้อมตรวจจับพิกัด 5 จุด Facial Landmarks (ตาซ้าย, ตาขวา, จมูก, มุมปาก 2 ข้าง) เพื่อทำ Face Alignment ปรับระนาบหน้าให้ตั้งตรง 112x112 ครับ"
+            },
+            {
+                q: "2. ทำไมถึงมั่นใจว่าความแม่นยำ (Accuracy) จะได้ไม่น้อยกว่าร้อยละ 90 ตามข้อ 8.4?",
+                a: "เพราะโมเดล MobileFaceNet ผ่านการเทรนด้วย Deep Metric Learning บนชุดข้อมูลระดับล้านภาพมาแล้ว และในขอบเขตข้อ 8.1.3 เราใช้ภาพหน้าตรง 3 ภาพต่อคน (Multi-template Enrollment) ซึ่งช่วยครอบคลุม Intra-class Variation (สีหน้า, แสง, องศา) ประกอบกับการทำ MTCNN 5-landmark alignment ทำให้ผลทดสอบจริงสามารถทำความแม่นยำได้สูงถึง 95-98% ซึ่งผ่านเกณฑ์ร้อยละ 90 ได้อย่างแน่นอนครับ"
+            },
+            {
+                q: "3. ทำไมในขอบเขตข้อ 8.5 จึงระบุว่าต้องทำงานในสภาพแวดล้อมภายในอาคาร (Indoor) แสงคงที่?",
+                a: "เนื่องจากในระยะเริ่มต้นของโครงงาน เราต้องการควบคุมตัวแปรกวน (Confounding Factors) ด้านแสงแดดจัด แสงสะท้อน หรือเงามืด เพื่อวัดประสิทธิภาพและผลกระทบของ INT8 Quantization ได้อย่างแม่นยำทางวิศวกรรม อีกทั้งระบบ Access Control ส่วนใหญ่มักติดตั้งอยู่ภายในอาคารหรือหน้าประตูทางเข้าอยู่แล้วครับ"
+            },
+            {
+                q: "4. ทำไมในข้อ 8.6 ถึงยังไม่รองรับ Anti-spoofing (การปลอมแปลงใบหน้า)?",
+                a: "เพราะการทำ Anti-spoofing หรือ Liveness Detection ที่มีประสิทธิภาพ (เช่น 3D Depth หรือ MiniFASNet) ต้องใช้พลังการประมวลผลเพิ่มขึ้นอีกเท่าตัว ในขอบเขตของโครงงานนี้เราจึงมุ่งเน้นที่โจทย์หลักคือ \"การรีดประสิทธิภาพ Face Recognition บน Edge Device ด้วย INT8 ให้ได้ 40+ FPS ก่อน\" และวาง Anti-spoofing ไว้เป็นหัวข้อต่อยอดในงานวิจัยขั้นต่อไปครับ"
+            },
+            {
+                q: "5. การทำ INT8 Quantization ส่งผลกระทบต่อความเร็วและขนาดโมเดลอย่างไร (ข้อ 8.4.1 และ 8.4.2)?",
+                a: "INT8 Quantization แปลงค่าน้ำหนักจาก Float32 เป็น Int8 ทำให้ขนาดไฟล์โมเดลลดลงจาก 13.3 MB เหลือเพียง 3.45 MB (ผ่านเกณฑ์ไม่เกิน 5 MB) และทำงานบนชุดคำสั่ง ARM NEON ของ Raspberry Pi 5 ได้เร็วกว่าเดิมกว่า 3.3 เท่า ทำให้ทำ Frame Rate ได้ถึง 65 FPS ซึ่งผ่านเกณฑ์ 40 FPS อย่างสบายครับ"
+            },
+            {
+                q: "6. ทำไมจัดเก็บเวกเตอร์ใน Localhost Database แทนการเก็บเป็นไฟล์ Pickle (.pkl)?",
+                a: "ฐานข้อมูล (PostgreSQL / SQLite) มีความปลอดภัยของข้อมูลแบบ ACID Transactions มีระบบ Indexing ค้นหาเวกเตอร์ Float32 BLOB ได้รวดเร็วระดับ Microseconds และรองรับการจัดการสิทธิ์ เพิ่ม/ลบ ผู้ใช้งานผ่าน Web Application ได้อย่างมีมาตรฐานทางวิศวกรรมซอฟต์แวร์ครับ"
+            }
+        ];
+
+        let currentSlideIdx = 0;
+
+        function initApp() {
+            populateJumpSelect();
+            renderThumbnails();
+            renderSlide(currentSlideIdx);
+            renderTeleprompter('all');
+            renderQA();
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                    nextSlide();
+                } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                    prevSlide();
+                }
+            });
+        }
+
+        function populateJumpSelect() {
+            const select = document.getElementById('slide-jump-select');
+            select.innerHTML = slidesData17.map((s, idx) => `
+                <option value="${idx}">หน้า ${s.id}: ${s.title.substring(0, 30)}...</option>
+            `).join('');
+        }
+
+        function renderThumbnails() {
+            const container = document.getElementById('thumbnails-container');
+            container.innerHTML = slidesData17.map((s, idx) => {
+                let badgeColor = s.speaker === 'sanya' ? 'border-cyan-500/50 text-cyan-400' :
+                                (s.speaker === 'narawich' ? 'border-purple-500/50 text-purple-400' : 'border-amber-500/50 text-amber-400');
+                return `
+                    <button onclick="jumpToSlide(${idx})" id="thumb-${idx}" class="p-2 rounded-xl bg-slate-900 border ${badgeColor} text-center hover:scale-105 transition-all">
+                        <div class="text-[10px] font-mono font-bold">#${s.id}</div>
+                        <div class="text-[9px] text-slate-400 truncate mt-0.5">${s.speakerName.split(' ')[0]}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderSlide(idx) {
+            currentSlideIdx = idx;
+            const slide = slidesData17[idx];
+
+            document.getElementById('current-slide-num').innerText = slide.id;
+            document.getElementById('slide-jump-select').value = idx;
+
+            slidesData17.forEach((_, i) => {
+                const thumb = document.getElementById(`thumb-${i}`);
+                if (thumb) {
+                    if (i === idx) {
+                        thumb.classList.add('ring-2', 'ring-cyan-400', 'bg-slate-800');
+                    } else {
+                        thumb.classList.remove('ring-2', 'ring-cyan-400', 'bg-slate-800');
+                    }
+                }
+            });
+
+            let speakerBorder = slide.speaker === 'sanya' ? 'border-cyan-500/40' :
+                               (slide.speaker === 'narawich' ? 'border-purple-500/40' : 'border-amber-500/40');
+            let speakerBadge = slide.speaker === 'sanya' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' :
+                              (slide.speaker === 'narawich' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30');
+            let quoteClass = slide.speaker === 'sanya' ? 'speech-quote' :
+                            (slide.speaker === 'narawich' ? 'speech-quote speech-quote-purple' : 'speech-quote speech-quote-gold');
+
+            const card = document.getElementById('slide-display-card');
+            card.className = `p-6 sm:p-8 rounded-3xl glass-card border-2 ${speakerBorder} relative overflow-hidden transition-all duration-300`;
+
+            card.innerHTML = `
+                <!-- Header of Slide Card -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+                    <div class="flex items-center gap-2.5">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-800 font-mono font-bold text-sm text-cyan-400 border border-slate-700">
+                            Slide ${slide.id} / 17
+                        </span>
+                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold border ${speakerBadge}">
+                            <i class="fa-solid fa-user-tie"></i> ผู้พูด: ${slide.speakerName} (${slide.speakerRole})
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-400 flex items-center gap-1.5 font-mono">
+                        <i class="fa-solid fa-clock text-cyan-400"></i> เวลาแนะนำ: <strong class="text-white">${slide.duration}</strong>
+                    </div>
+                </div>
+
+                <!-- Slide Title -->
+                <div class="mt-4">
+                    <h3 class="text-xl sm:text-2xl font-bold text-white font-outfit">${slide.title}</h3>
+                    <p class="text-xs sm:text-sm text-cyan-400 font-mono mt-0.5">${slide.subtitle}</p>
+                </div>
+
+                <!-- Main Content Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-start">
+                    
+                    <!-- Left: Speaking Script -->
+                    <div class="lg:col-span-7 space-y-4">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                            <span><i class="fa-solid fa-microphone text-cyan-400"></i> บทพูดคำต่อคำ (Speaking Script)</span>
+                            <span class="text-[11px] text-emerald-400 font-normal">อ่านอย่างเป็นธรรมชาติและมั่นใจ</span>
+                        </div>
+
+                        <!-- Speech Box -->
+                        <div class="p-5 sm:p-6 rounded-2xl ${quoteClass} shadow-xl">
+                            <p class="text-slate-100 text-base sm:text-lg leading-relaxed whitespace-pre-line font-normal">${slide.script}</p>
+                        </div>
+
+                        <!-- Key Talking Points Checklist -->
+                        <div class="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
+                            <div class="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
+                                <i class="fa-solid fa-list-check text-cyan-400"></i> สรุปประเด็นสำคัญที่ต้องพูดในสไลด์นี้:
+                            </div>
+                            <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                                ${slide.keyPoints.map(kp => `<li class="leading-relaxed text-slate-300">${kp}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Right: Slide Visual Preview -->
+                    <div class="lg:col-span-5 w-full">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span><i class="fa-solid fa-image text-cyan-400"></i> ภาพสไลด์จาก Face_Recognition(2).pptx</span>
+                            <span class="text-[10px] font-mono text-slate-400">Slide #${slide.id}</span>
+                        </div>
+                        <div class="p-2 rounded-2xl bg-slate-950 border border-slate-800 text-center overflow-hidden">
+                            <img src="${slide.image}" alt="Slide ${slide.id}" class="w-full h-auto max-h-72 object-contain rounded-xl mx-auto shadow-lg" onerror="this.src='presentation_assets/slides_17/slide1.png'">
+                            <div class="mt-2 text-[11px] text-slate-400 font-mono">Face_Recognition(2).pptx - Slide ${slide.id}</div>
+                        </div>
+                    </div>
+
+                </div>
+            `;
+        }
+
+        function prevSlide() {
+            if (currentSlideIdx > 0) {
+                renderSlide(currentSlideIdx - 1);
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlideIdx < slidesData17.length - 1) {
+                renderSlide(currentSlideIdx + 1);
+            }
+        }
+
+        function jumpToSlide(idx) {
+            renderSlide(parseInt(idx, 10));
+        }
+
+        function copyCurrentScript() {
+            const current = slidesData17[currentSlideIdx];
+            const textToCopy = `[Slide ${current.id}: ${current.title}]\nผู้พูด: ${current.speakerName} (${current.speakerRole})\n\n${current.script}`;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const btn = document.getElementById('btn-copy');
+                btn.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i> คัดลอกแล้ว!';
+                btn.classList.add('bg-emerald-950', 'border-emerald-500');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fa-regular fa-copy"></i> คัดลอกบทพูดหน้านี้';
+                    btn.classList.remove('bg-emerald-950', 'border-emerald-500');
+                }, 2000);
+            });
+        }
+
+        function setViewMode(mode) {
+            document.getElementById('view-slider').classList.add('hidden');
+            document.getElementById('view-teleprompter').classList.add('hidden');
+            document.getElementById('view-qa').classList.add('hidden');
+
+            document.getElementById('btn-mode-slider').className = "px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5";
+            document.getElementById('btn-mode-tele').className = "px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5";
+            document.getElementById('btn-mode-qa').className = "px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition-all flex items-center gap-1.5";
+
+            if (mode === 'slider') {
+                document.getElementById('view-slider').classList.remove('hidden');
+                document.getElementById('btn-mode-slider').className = "px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-950 font-bold transition-all flex items-center gap-1.5";
+            } else if (mode === 'teleprompter') {
+                document.getElementById('view-teleprompter').classList.remove('hidden');
+                document.getElementById('btn-mode-tele').className = "px-3 py-1.5 rounded-lg bg-purple-500 text-white font-bold transition-all flex items-center gap-1.5";
+            } else if (mode === 'qa') {
+                document.getElementById('view-qa').classList.remove('hidden');
+                document.getElementById('btn-mode-qa').className = "px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold transition-all flex items-center gap-1.5";
+            }
+        }
+
+        function filterTeleprompter(speaker) {
+            document.querySelectorAll('.tele-filter-btn').forEach(btn => btn.classList.remove('bg-cyan-500', 'text-slate-950', 'font-bold'));
+            event.target.classList.add('bg-cyan-500', 'text-slate-950', 'font-bold');
+            renderTeleprompter(speaker);
+        }
+
+        function renderTeleprompter(filterSpeaker) {
+            const list = document.getElementById('teleprompter-list');
+            const filtered = (filterSpeaker === 'all') ? slidesData17 : slidesData17.filter(s => s.speaker === filterSpeaker);
+
+            list.innerHTML = filtered.map(s => {
+                let badgeColor = s.speaker === 'sanya' ? 'text-cyan-400 bg-cyan-950/60 border-cyan-800' :
+                                (s.speaker === 'narawich' ? 'text-purple-400 bg-purple-950/60 border-purple-800' : 'text-amber-400 bg-amber-950/60 border-amber-800');
+                let quoteClass = s.speaker === 'sanya' ? 'speech-quote' :
+                                (s.speaker === 'narawich' ? 'speech-quote speech-quote-purple' : 'speech-quote speech-quote-gold');
+                return `
+                    <div class="p-6 sm:p-8 rounded-2xl glass-card border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-mono font-bold text-white px-2.5 py-0.5 rounded bg-slate-800 border border-slate-700">Slide ${s.id}</span>
+                                <h4 class="font-bold text-base text-white font-outfit">${s.title}</h4>
+                            </div>
+                            <span class="text-xs px-2.5 py-0.5 rounded-full border ${badgeColor} font-semibold">${s.speakerName} (${s.duration})</span>
+                        </div>
+                        <div class="p-5 rounded-xl ${quoteClass}">
+                            <p class="text-white tele-text whitespace-pre-line">${s.script}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderQA() {
+            const container = document.getElementById('qa-cards-container');
+            container.innerHTML = qaData17.map((item, idx) => `
+                <div class="p-6 rounded-2xl glass-card border border-slate-700/80 space-y-3">
+                    <div class="font-bold text-sm sm:text-base text-amber-300 flex items-start gap-2">
+                        <i class="fa-solid fa-circle-question text-amber-400 shrink-0 mt-1"></i>
+                        <span>${item.q}</span>
+                    </div>
+                    <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-xs sm:text-sm text-slate-200 leading-relaxed">
+                        <strong class="text-emerald-400 font-semibold block mb-1">
+                            <i class="fa-solid fa-circle-check"></i> แนวทางตอบกรรมการ:
+                        </strong>
+                        ${item.a}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>

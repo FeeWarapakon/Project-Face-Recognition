@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#111827" /><stop offset="100%" stop-color="#1f2937" /></linearGradient>
+    <linearGradient id="skinm" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fae2d0" /><stop offset="100%" stop-color="#dfb395" /></linearGradient>
+  </defs>
+  <rect width="300" height="360" fill="url(#bgm)" />
+  <path d="M70 360 L80 300 Q105 270 150 270 Q195 270 220 300 L230 360 Z" fill="#374151" />
+  <path d="M128 230 L128 275 Q150 285 172 275 L172 230 Z" fill="#dca17a" />
+  <ellipse cx="150" cy="180" rx="52" ry="68" fill="url(#skinm)" />
+  <ellipse cx="96" cy="180" rx="8" ry="15" fill="#dca17a" /><ellipse cx="204" cy="180" rx="8" ry="15" fill="#dca17a" />
+  <!-- Side part hair -->
+  <path d="M92 175 Q90 100 135 95 Q170 95 208 175 Q200 120 170 105 Q140 105 110 115 Q95 130 92 175 Z" fill="#1c1917" />
+  <path d="M115 155 Q130 150 142 155" stroke="#1c1917" stroke-width="4" stroke-linecap="round" fill="none" />
+  <path d="M158 155 Q170 150 185 155" stroke="#1c1917" stroke-width="4" stroke-linecap="round" fill="none" />
+  <ellipse cx="128" cy="170" rx="7" ry="5" fill="#ffffff" /><ellipse cx="172" cy="170" rx="7" ry="5" fill="#ffffff" />
+  <circle cx="128" cy="170" r="3.5" fill="#181a20" /><circle cx="172" cy="170" r="3.5" fill="#181a20" />
+  <path d="M150 165 L148 190 L154 190" stroke="#c58e69" stroke-width="2.5" stroke-linecap="round" fill="none" />
+  <path d="M136 212 Q150 219 164 212" stroke="#b26d58" stroke-width="3" stroke-linecap="round" fill="none" />
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b0764" /><stop offset="100%" stop-color="#1e1b4b" /></linearGradient>
+    <linearGradient id="skinw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fce7db" /><stop offset="100%" stop-color="#f3c4a8" /></linearGradient>
+  </defs>
+  <rect width="300" height="360" fill="url(#bgw)" />
+  <path d="M70 360 L80 300 Q105 270 150 270 Q195 270 220 300 L230 360 Z" fill="#4c1d95" />
+  <path d="M128 230 L128 275 Q150 285 172 275 L172 230 Z" fill="#e8b292" />
+  <!-- Long hair back -->
+  <path d="M75 160 Q70 290 90 320 L110 320 Q100 240 100 160 Z" fill="#18181b" />
+  <path d="M225 160 Q230 290 210 320 L190 320 Q200 240 200 160 Z" fill="#18181b" />
+  <ellipse cx="150" cy="180" rx="48" ry="62" fill="url(#skinw)" />
+  <ellipse cx="98" cy="180" rx="7" ry="12" fill="#e8b292" /><ellipse cx="202" cy="180" rx="7" ry="12" fill="#e8b292" />
+  <!-- Hair Front Female -->
+  <path d="M85 160 Q80 90 150 85 Q220 90 215 160 Q205 110 170 115 Q150 120 130 115 Q95 110 85 160 Z" fill="#18181b" />
+  <path d="M115 152 Q128 147 140 152" stroke="#27272a" stroke-width="3" stroke-linecap="round" fill="none" />
+  <path d="M160 152 Q172 147 185 152" stroke="#27272a" stroke-width="3" stroke-linecap="round" fill="none" />
+  <ellipse cx="128" cy="168" rx="6.5" ry="5.5" fill="#ffffff" /><ellipse cx="172" cy="168" rx="6.5" ry="5.5" fill="#ffffff" />
+  <circle cx="128" cy="168" r="3.2" fill="#181a20" /><circle cx="172" cy="168" r="3.2" fill="#181a20" />
+  <path d="M150 164 L148 186 L153 186" stroke="#c58e69" stroke-width="2" stroke-linecap="round" fill="none" />
+  <path d="M137 208 Q150 215 163 208" stroke="#e11d48" stroke-width="3.5" stroke-linecap="round" fill="none" />
+</svg>

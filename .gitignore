@@ -1,0 +1,43 @@
+# Python Virtual Environments & Caches
+venv/
+.venv/
+*/venv/
+*/.venv/
+__pycache__/
+*/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Node.js & Frontend Build Outputs
+node_modules/
+*/node_modules/
+.svelte-kit/
+*/.svelte-kit/
+build/
+*/build/
+dist/
+*/dist/
+.output/
+
+# Environment & Config Secrets
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Logs & Temporary Files
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS & Editor Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Model Cache & Very Large Unused Models (>50MB)
+Antigravity/facenet_512d.onnx

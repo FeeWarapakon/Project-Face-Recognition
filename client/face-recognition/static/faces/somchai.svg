@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2d3748" />
+      <stop offset="100%" stop-color="#1a202c" />
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8d1b3" />
+      <stop offset="100%" stop-color="#e6b18c" />
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f242e" />
+      <stop offset="100%" stop-color="#0f1115" />
+    </linearGradient>
+    <linearGradient id="shirt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+  <!-- Background room / office blur -->
+  <rect width="300" height="360" fill="url(#bg)" />
+  <rect x="20" y="40" width="80" height="100" fill="#3b4252" opacity="0.3" rx="4" />
+  <rect x="210" y="70" width="70" height="80" fill="#3b4252" opacity="0.25" rx="4" />
+
+  <!-- Clothes / Shirt -->
+  <path d="M70 360 L80 300 Q105 270 150 270 Q195 270 220 300 L230 360 Z" fill="url(#shirt)" />
+  <path d="M125 270 Q150 300 175 270 Z" fill="#0f172a" />
+  
+  <!-- Neck -->
+  <path d="M128 230 L128 275 Q150 285 172 275 L172 230 Z" fill="#dca17a" />
+  
+  <!-- Head / Face -->
+  <ellipse cx="150" cy="180" rx="52" ry="68" fill="url(#skin)" />
+  
+  <!-- Ears -->
+  <ellipse cx="96" cy="180" rx="8" ry="15" fill="#dca17a" />
+  <ellipse cx="204" cy="180" rx="8" ry="15" fill="#dca17a" />
+
+  <!-- Hair Back / Top -->
+  <path d="M92 175 Q88 120 125 100 Q150 92 175 100 Q212 120 208 175 Q205 145 190 120 Q160 110 140 115 Q115 125 92 175 Z" fill="url(#hair)" />
+  <!-- Hair Front Bangs -->
+  <path d="M96 150 Q120 115 150 115 Q180 115 204 150 Q180 135 155 140 Q125 130 96 150 Z" fill="url(#hair)" />
+
+  <!-- Eyebrows -->
+  <path d="M115 155 Q130 150 142 156" stroke="#1f242e" stroke-width="4" stroke-linecap="round" fill="none" />
+  <path d="M158 156 Q170 150 185 155" stroke="#1f242e" stroke-width="4" stroke-linecap="round" fill="none" />
+
+  <!-- Eyes -->
+  <ellipse cx="128" cy="170" rx="7" ry="5" fill="#ffffff" />
+  <ellipse cx="172" cy="170" rx="7" ry="5" fill="#ffffff" />
+  <circle cx="128" cy="170" r="3.5" fill="#181a20" />
+  <circle cx="172" cy="170" r="3.5" fill="#181a20" />
+  <circle cx="129" cy="169" r="1" fill="#ffffff" />
+  <circle cx="173" cy="169" r="1" fill="#ffffff" />
+
+  <!-- Nose -->
+  <path d="M150 165 L148 190 L154 190" stroke="#c58e69" stroke-width="2.5" stroke-linecap="round" fill="none" />
+
+  <!-- Mouth -->
+  <path d="M136 212 Q150 219 164 212" stroke="#b26d58" stroke-width="3" stroke-linecap="round" fill="none" />
+</svg>

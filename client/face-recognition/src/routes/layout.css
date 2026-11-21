@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&family=Prompt:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+
+@layer base {
+  body {
+    font-family: 'Prompt', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #050608;
+    color: #e2e8f0;
+    overflow-x: hidden;
+  }
+
+  code, kbd, samp, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* =========================================================================
+   AUTHENTIC RETRO-INDUSTRIAL CYBER LABORATORY DESIGN SYSTEM
+   ========================================================================= */
+
+/* Heavy Industrial Gunmetal Chassis */
+.chassis-panel {
+  background: linear-gradient(180deg, #181d28 0%, #111520 60%, #0a0d14 100%);
+  border: 1px solid #283348;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+.chassis-panel-amber {
+  background: linear-gradient(180deg, #1c1810 0%, #13100a 60%, #0a0805 100%);
+  border: 1px solid #4a3617;
+  box-shadow: inset 0 1px 0 rgba(245, 158, 11, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+.chassis-panel-emerald {
+  background: linear-gradient(180deg, #101c18 0%, #0a1310 60%, #050a08 100%);
+  border: 1px solid #164335;
+  box-shadow: inset 0 1px 0 rgba(16, 185, 129, 0.2), inset 0 -1px 0 rgba(0, 0, 0, 0.6), 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+/* Pitch Black CRT Terminal Screen */
+.terminal-screen {
+  background: #020406;
+  border: 2px solid #181f2c;
+  box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.95);
+}
+
+/* CRT Phosphor Scanline Filter */
+.crt-scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.4) 50%
+  );
+  background-size: 100% 4px;
+}
+
+/* CRT Screen Vignette Edge Shadow */
+.crt-vignette {
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9);
+}
+
+/* Corner Screws / Rivets */
+.screw-marker {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background-color: #384256;
+  border: 1px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  line-height: 1;
+  color: #000;
+  font-weight: 800;
+  user-select: none;
+}
+
+/* Industrial Terminal Input */
+.terminal-input {
+  background-color: rgba(2, 4, 6, 0.92);
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  color: #fef08a;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+.terminal-input:focus {
+  border-color: #f59e0b;
+  box-shadow: inset 0 0 16px rgba(245, 158, 11, 0.25), 0 0 10px rgba(245, 158, 11, 0.35);
+  outline: none;
+}
+
+/* Amber & Emerald Glows */
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+}
+
+/* Hazard Warning Stripes */
+.hazard-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(244, 63, 94, 0.18),
+    rgba(244, 63, 94, 0.18) 12px,
+    rgba(15, 23, 42, 0.5) 12px,
+    rgba(15, 23, 42, 0.5) 24px
+  );
+}
+
+.hazard-stripes-amber {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(245, 158, 11, 0.18),
+    rgba(245, 158, 11, 0.18) 12px,
+    rgba(15, 23, 42, 0.5) 12px,
+    rgba(15, 23, 42, 0.5) 24px
+  );
+}
+
+/* Custom Tactical Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06080d;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #252e40;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}

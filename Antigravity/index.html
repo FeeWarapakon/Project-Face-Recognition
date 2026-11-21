@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Recognition on Raspberry Pi 5 | MTCNN + MobileFaceNet + SQLite DB</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                            900: '#14532d',
+                        },
+                        accent: {
+                            blue: '#38bdf8',
+                            purple: '#a855f7',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e'
+                        },
+                        tech: {
+                            dark: '#0a0e17',
+                            card: '#131b2e',
+                            border: '#1e293b',
+                            accent: '#38bdf8'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Prompt:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Prism.js for Syntax Highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #070b12;
+            color: #e2e8f0;
+        }
+        .font-outfit {
+            font-family: 'Outfit', sans-serif;
+        }
+        .glass-card {
+            background: rgba(19, 27, 46, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-card-hover:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 12px 30px -10px rgba(56, 189, 248, 0.15);
+        }
+        .gradient-text-cyan-green {
+            background: linear-gradient(135deg, #38bdf8 0%, #22c55e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .gradient-text-purple-pink {
+            background: linear-gradient(135deg, #c084fc 0%, #f43f5e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .glow-effect {
+            box-shadow: 0 0 40px -10px rgba(34, 197, 94, 0.3);
+        }
+        pre[class*="language-"] {
+            margin: 0;
+            border-radius: 0.75rem;
+            background: #090d16 !important;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070b12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+<body class="bg-[#070b12] text-slate-100 min-h-screen selection:bg-brand-500 selection:text-black">
+
+    <!-- Top Navigation -->
+    <nav class="sticky top-0 z-50 glass-card border-b border-slate-800/80 px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 via-emerald-500 to-green-500 flex items-center justify-center text-slate-950 font-bold text-xl shadow-lg shadow-green-500/20">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg leading-tight tracking-tight text-white flex items-center gap-2">
+                        FaceRec on Pi 5 <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">MTCNN + MobileFaceNet</span>
+                    </h1>
+                    <p class="text-[11px] text-slate-400">โครงงานวิศวกรรมคอมพิวเตอร์ | Edge Face Recognition + SQLite DB</p>
+                </div>
+            </div>
+
+            <div class="hidden lg:flex items-center space-x-6 text-sm font-medium text-slate-300">
+                <a href="#overview" class="hover:text-cyan-400 transition-colors">ภาพรวม</a>
+                <a href="#pipeline" class="hover:text-cyan-400 transition-colors">สถาปัตยกรรม (MTCNN)</a>
+                <a href="#database" class="hover:text-cyan-400 transition-colors">ฐานข้อมูล SQLite</a>
+                <a href="#similarity" class="hover:text-cyan-400 transition-colors">Cosine Similarity</a>
+                <a href="#simulator" class="hover:text-cyan-400 transition-colors">เครื่องมือจำลอง</a>
+                <a href="#benchmarks" class="hover:text-cyan-400 transition-colors">ผลทดสอบ Pi 5</a>
+                <a href="#code" class="hover:text-cyan-400 transition-colors">ซอร์สโค้ด</a>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <a href="presentation_script.html" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md hover:opacity-90 transition-all">
+                    <i class="fa-solid fa-microphone-lines"></i> <span>บทพูดนำเสนอ (22 สไลด์)</span>
+                </a>
+                <a href="#code" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-semibold text-xs flex items-center gap-1.5 shadow-md hover:opacity-90 transition-all">
+                    <i class="fa-solid fa-code"></i> <span>ดูโค้ดโปรแกรม</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header id="overview" class="relative overflow-hidden py-16 lg:py-20 border-b border-slate-800/60">
+        <!-- Background Lighting -->
+        <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-r from-cyan-500/15 via-emerald-500/20 to-green-500/10 blur-[120px] rounded-full pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto px-4 lg:px-8 relative z-10">
+            <div class="flex flex-col lg:flex-row items-center justify-between gap-12">
+                
+                <!-- Left: Title & Descriptions -->
+                <div class="lg:w-7/12 text-left">
+                    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs text-cyan-300 mb-5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Senior Project | สาขาวิชาวิศวกรรมคอมพิวเตอร์</span>
+                    </div>
+
+                    <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight tracking-tight font-outfit">
+                        การพัฒนาระบบรู้จำใบหน้าบน <br />
+                        <span class="gradient-text-cyan-green">Raspberry Pi 5</span> <br />
+                        <span class="text-2xl sm:text-3xl text-slate-300 font-medium">(MTCNN + MobileFaceNet + SQLite DB)</span>
+                    </h1>
+
+                    <p class="mt-5 text-slate-300 text-base lg:text-lg leading-relaxed font-light">
+                        ระบบรู้จำใบหน้าประสิทธิภาพสูงบนอุปกรณ์ประมวลผลริมขอบ (Edge Device) ทำงานแบบ 
+                        <strong class="text-white font-medium">On-device Processing 100%</strong> ไม่ต้องพึ่งพา Cloud 
+                        ใช้ <strong class="text-cyan-300 font-medium">MTCNN (P-Net, R-Net, O-Net)</strong> สำหรับตรวจจับและปรับระนาบใบหน้า 5 จุด 
+                        ตามด้วย <strong class="text-emerald-300 font-medium">MobileFaceNet INT8</strong> สกัดเวกเตอร์เอกลักษณ์ และจัดเก็บลงใน 
+                        <strong class="text-amber-300 font-medium">ฐานข้อมูล SQLite Vector Storage</strong> เพื่อการระบุตัวตนแบบเรียลไทม์
+                    </p>
+
+                    <!-- Badges -->
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <span class="px-3 py-1 rounded-md bg-cyan-950/60 border border-cyan-800/50 text-xs text-cyan-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-bolt"></i> 65+ FPS Real-time
+                        </span>
+                        <span class="px-3 py-1 rounded-md bg-emerald-950/60 border border-emerald-800/50 text-xs text-emerald-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-compress"></i> INT8 Quantization (-74.1%)
+                        </span>
+                        <span class="px-3 py-1 rounded-md bg-amber-950/60 border border-amber-800/50 text-xs text-amber-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-database"></i> SQLite Float32 BLOB
+                        </span>
+                        <span class="px-3 py-1 rounded-md bg-purple-950/60 border border-purple-800/50 text-xs text-purple-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-shield-halved"></i> 100% Privacy Friendly
+                        </span>
+                    </div>
+
+                    <!-- Project Members Card -->
+                    <div class="mt-8 p-4 rounded-xl glass-card border border-slate-700/60">
+                        <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-users text-cyan-400"></i> คณะผู้จัดทำโครงงาน & อาจารย์ที่ปรึกษา
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
+                                <div class="font-medium text-white">นายนราวิชญ์ อนุวงศ์</div>
+                                <div class="text-slate-400 font-mono mt-0.5">68543206118-0</div>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
+                                <div class="font-medium text-white">นายสัญญา ลุงจาย</div>
+                                <div class="text-slate-400 font-mono mt-0.5">68543206057-0</div>
+                            </div>
+                            <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
+                                <div class="font-medium text-white">นายวราปกรณ์ พิมพ์วงษ์</div>
+                                <div class="text-slate-400 font-mono mt-0.5">68543206123-0</div>
+                            </div>
+                        </div>
+                        <div class="mt-2.5 pt-2 border-t border-slate-800/80 text-xs text-slate-400 flex items-center justify-between">
+                            <span>อาจารย์ที่ปรึกษาโครงงาน: <strong class="text-slate-200">ผศ.สมนึก สุระธง</strong></span>
+                            <span class="text-cyan-400 font-mono text-[11px]">Computer Engineering Dept.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Quick Stat Metrics -->
+                <div class="lg:w-5/12 w-full space-y-4">
+                    <div class="p-6 rounded-2xl glass-card border border-slate-700/70 relative overflow-hidden">
+                        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                            <span class="text-xs uppercase font-bold tracking-wider text-cyan-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-gauge-high"></i> Performance Highlights
+                            </span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Raspberry Pi 5 Tested</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
+                                <div class="text-xs text-slate-400">Total Latency (End-to-End)</div>
+                                <div class="text-2xl font-bold text-white font-outfit mt-1">15.17 <span class="text-sm font-normal text-cyan-400">ms</span></div>
+                                <div class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-bolt"></i> ~65.9 FPS</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
+                                <div class="text-xs text-slate-400">MobileFaceNet Size</div>
+                                <div class="text-2xl font-bold text-white font-outfit mt-1">3.45 <span class="text-sm font-normal text-emerald-400">MB</span></div>
+                                <div class="text-[11px] text-emerald-400 mt-1"><i class="fa-solid fa-arrow-down"></i> ลดลง 74.1% (INT8)</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
+                                <div class="text-xs text-slate-400">MTCNN 5-Landmark Align</div>
+                                <div class="text-2xl font-bold text-white font-outfit mt-1">12.22 <span class="text-sm font-normal text-purple-400">ms</span></div>
+                                <div class="text-[11px] text-purple-300 mt-1">P-Net + R-Net + O-Net</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/80">
+                                <div class="text-xs text-slate-400">SQLite Vector Match</div>
+                                <div class="text-2xl font-bold text-white font-outfit mt-1">0.39 <span class="text-sm font-normal text-amber-400">ms</span></div>
+                                <div class="text-[11px] text-amber-300 mt-1">Cosine Similarity Scan</div>
+                            </div>
+                        </div>
+
+                        <!-- Live Pipeline Status Indicator -->
+                        <div class="mt-4 p-3 rounded-xl bg-slate-950/80 border border-slate-800/90 text-xs flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                <span class="text-slate-300">Pipeline Status: <span class="text-emerald-400 font-semibold">Active (SQLite Linked)</span></span>
+                            </div>
+                            <span class="text-slate-400 font-mono">SQLite DB: 3 Members</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </header>
+
+    <!-- Pipeline Architecture Section (Matching Slide 5 & Slide 6) -->
+    <section id="pipeline" class="py-16 border-b border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-3">
+                    <i class="fa-solid fa-diagram-project"></i> สถาปัตยกรรมระบบรู้จำใบหน้า (Architecture Pipeline)
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                    การเชื่อมต่อการทำงานแบบ End-to-End <span class="gradient-text-cyan-green">ตามสไลด์นำเสนอ</span>
+                </h2>
+                <p class="mt-3 text-sm text-slate-400">
+                    ขั้นตอนการทำงานตั้งแต่รับภาพจากกล้อง เข้าสู่การตรวจจับใบหน้าด้วย MTCNN สกัดเวกเตอร์ด้วย MobileFaceNet และเปรียบเทียบในฐานข้อมูล SQLite
+                </p>
+            </div>
+
+            <!-- Pipeline Flow Diagram Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                
+                <!-- Stage 1 -->
+                <div class="p-5 rounded-2xl glass-card border border-slate-700/80 glass-card-hover relative">
+                    <div class="text-xs font-mono font-bold text-cyan-400 mb-2 flex items-center justify-between">
+                        <span>STAGE 01</span>
+                        <i class="fa-solid fa-video text-cyan-400"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-white mb-2">Camera Input</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        รับสัญญาณภาพวิดีโอจากกล้อง USB หรือ Raspberry Pi Camera Module ความละเอียด <span class="text-cyan-300 font-mono">640x480 @ 30 FPS</span> ในฟอร์แมต BGR
+                    </p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+                        <span class="text-cyan-400 font-mono">Input:</span> Image Tensor
+                    </div>
+                </div>
+
+                <!-- Stage 2 (MTCNN - Highlighted) -->
+                <div class="p-5 rounded-2xl glass-card border-2 border-cyan-500/40 glass-card-hover relative bg-gradient-to-b from-cyan-950/20 to-slate-900/40">
+                    <div class="text-xs font-mono font-bold text-cyan-300 mb-2 flex items-center justify-between">
+                        <span>STAGE 02</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Core Step</span>
+                    </div>
+                    <h3 class="text-base font-bold text-white mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-expand text-cyan-400"></i> MTCNN Detection
+                    </h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        ทำงานผ่าน 3 โครงข่ายย่อย <strong>(P-Net &rarr; R-Net &rarr; O-Net)</strong> ตรวจจับตำแหน่งใบหน้า ค้นหา <strong>5 Facial Landmarks</strong> และทำการ Crop & Align เป็น <span class="text-cyan-300 font-mono">112x112</span>
+                    </p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+                        <span class="text-cyan-400 font-mono">Latency:</span> ~12.2 ms
+                    </div>
+                </div>
+
+                <!-- Stage 3 (MobileFaceNet) -->
+                <div class="p-5 rounded-2xl glass-card border-2 border-emerald-500/40 glass-card-hover relative bg-gradient-to-b from-emerald-950/20 to-slate-900/40">
+                    <div class="text-xs font-mono font-bold text-emerald-300 mb-2 flex items-center justify-between">
+                        <span>STAGE 03</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Feature Extractor</span>
+                    </div>
+                    <h3 class="text-base font-bold text-white mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-fingerprint text-emerald-400"></i> MobileFaceNet
+                    </h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        โครงข่าย Lightweight CNN สกัดเอกลักษณ์ใบหน้าออกเป็น <strong>Face Embedding Vector</strong> มิติสูง พร้อมทำ <span class="text-emerald-300 font-mono">L2-Normalization</span> (Unit Vector)
+                    </p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+                        <span class="text-emerald-400 font-mono">Latency:</span> ~2.5 ms
+                    </div>
+                </div>
+
+                <!-- Stage 4 (SQLite Vector Storage) -->
+                <div class="p-5 rounded-2xl glass-card border-2 border-amber-500/40 glass-card-hover relative bg-gradient-to-b from-amber-950/20 to-slate-900/40">
+                    <div class="text-xs font-mono font-bold text-amber-300 mb-2 flex items-center justify-between">
+                        <span>STAGE 04</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30">SQLite DB</span>
+                    </div>
+                    <h3 class="text-base font-bold text-white mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-database text-amber-400"></i> SQLite Vector Match
+                    </h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        ดึงเวกเตอร์ของสมาชิกที่บันทึกไว้ใน <span class="text-amber-300 font-mono">face_recognition.db</span> (Float32 BLOB) มาคำนวณ <strong>Cosine Similarity</strong> เทียบกับ Query Vector
+                    </p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+                        <span class="text-amber-400 font-mono">Latency:</span> ~0.4 ms
+                    </div>
+                </div>
+
+                <!-- Stage 5 (Decision) -->
+                <div class="p-5 rounded-2xl glass-card border border-slate-700/80 glass-card-hover relative">
+                    <div class="text-xs font-mono font-bold text-purple-400 mb-2 flex items-center justify-between">
+                        <span>STAGE 05</span>
+                        <i class="fa-solid fa-id-card-clip text-purple-400"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-white mb-2">Known / Unknown</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        นำคะแนนความคล้ายคลึงสูงสุดมาเปรียบเทียบกับ <strong>Threshold (t = 0.60)</strong> หากค่า &ge; t จะระบุชื่อบุคคล (Known) หากน้อยกว่าจะถือเป็น Unknown พร้อมบันทึก Log
+                    </p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400">
+                        <span class="text-purple-400 font-mono">Threshold:</span> 0.60
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Detailed Explanation: MTCNN 3-Stage Cascaded Network -->
+    <section class="py-16 border-b border-slate-800/60 bg-slate-950/40">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="flex flex-col lg:flex-row items-center gap-12">
+                
+                <div class="lg:w-1/2">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-3">
+                        <i class="fa-solid fa-layer-group"></i> ทำความเข้าใจขั้นตอน MTCNN อย่างละเอียด
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                        ทำไมต้องผ่าน <span class="text-cyan-400">MTCNN</span> ก่อนส่งเข้า MobileFaceNet?
+                    </h2>
+                    <p class="mt-4 text-sm text-slate-300 leading-relaxed">
+                        ในระบบรู้จำใบหน้าที่แม่นยำ การส่งภาพดิบจากกล้องเข้าสู่โมเดลสกัดเวกเตอร์โดยตรงมักทำให้ความแม่นยำตกต่ำอย่างมาก เนื่องจากขนาดใบหน้า องศาการเอียง และตำแหน่งในภาพไม่คงที่ 
+                        <strong>MTCNN (Multi-task Cascaded Convolutional Networks)</strong> จึงทำหน้าที่สำคัญ 2 ประการ:
+                    </p>
+
+                    <div class="mt-6 space-y-4">
+                        <div class="p-4 rounded-xl glass-card border border-slate-800 flex gap-4">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm shrink-0">1</div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Proposal Network (P-Net)</h4>
+                                <p class="text-xs text-slate-300 mt-1">โครงข่าย Fully Convolutional ทำการสแกนภาพ Image Pyramid ทุกขนาดอย่างรวดเร็ว เพื่อสร้าง Candidate Bounding Boxes นับร้อยจุดที่มีโอกาสเป็นใบหน้า</p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-xl glass-card border border-slate-800 flex gap-4">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">2</div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Refine Network (R-Net)</h4>
+                                <p class="text-xs text-slate-300 mt-1">รับภาพขนาด $24 \times 24$ จาก P-Net เพื่อกรอง False Positives (วัตถุที่ไม่ใช่ใบหน้า) ออกไป พร้อมทำ Non-Maximum Suppression (NMS) และปรับพิกัดกรอบให้ชิดขึ้น</p>
+                            </div>
+                        </div>
+
+                        <div class="p-4 rounded-xl glass-card border border-slate-800 flex gap-4">
+                            <div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0">3</div>
+                            <div>
+                                <h4 class="text-sm font-bold text-white">Output Network (O-Net) & 5 Landmarks Alignment</h4>
+                                <p class="text-xs text-slate-300 mt-1">โครงข่ายที่ซับซ้อนที่สุด รับภาพ $48 \times 48$ ระบุ Bounding Box ขั้นสุดท้าย พร้อมตรวจจับพิกัด <strong>5 จุดสำคัญบนใบหน้า</strong> (ตาซ้าย, ตาขวา, จมูก, มุมปากซ้าย, มุมปากขวา) เพื่อทำ <strong>Face Alignment</strong> ปรับให้ใบหน้าตั้งตรงเสมอ</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MTCNN Visual Graphic -->
+                <div class="lg:w-1/2 w-full">
+                    <div class="p-6 rounded-2xl glass-card border border-slate-700 relative overflow-hidden">
+                        <div class="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span><i class="fa-solid fa-cube"></i> MTCNN Alignment Transformation</span>
+                            <span class="font-mono text-slate-400 text-[11px]">112 x 112 Standard Input</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                                <div class="w-24 h-24 mx-auto rounded-xl bg-slate-800/80 border-2 border-dashed border-red-500/60 flex items-center justify-center relative rotate-12">
+                                    <i class="fa-regular fa-face-smile text-3xl text-slate-400"></i>
+                                    <span class="absolute -top-2 -right-2 px-1.5 py-0.5 rounded text-[9px] bg-red-500/20 text-red-300 border border-red-500/40">Tilted / Raw</span>
+                                </div>
+                                <div class="mt-3 text-xs font-semibold text-slate-300">ภาพดิบจากกล้อง</div>
+                                <div class="text-[11px] text-slate-400">ใบหน้าเอียง ไม่ตรงสเกล</div>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-emerald-500/30">
+                                <div class="w-24 h-24 mx-auto rounded-xl bg-emerald-950/40 border-2 border-emerald-500 flex items-center justify-center relative">
+                                    <i class="fa-regular fa-face-smile text-3xl text-emerald-400"></i>
+                                    <!-- 5 Dots -->
+                                    <div class="absolute top-8 left-7 w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                                    <div class="absolute top-8 right-7 w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                                    <div class="absolute top-12 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                                    <div class="absolute bottom-6 left-8 w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                                    <div class="absolute bottom-6 right-8 w-1.5 h-1.5 bg-yellow-400 rounded-full"></div>
+                                    <span class="absolute -top-2 -right-2 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Aligned 112x112</span>
+                                </div>
+                                <div class="mt-3 text-xs font-semibold text-emerald-300">ผ่าน MTCNN Alignment</div>
+                                <div class="text-[11px] text-slate-400">ระนาบตรง 5 Landmarks</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                            <span>การ Align ใบหน้าช่วยเพิ่มความแม่นยำในการรู้จำของ MobileFaceNet ขึ้นมากกว่า <strong class="text-white">18.5%</strong> ในมุมมองเอียง</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- SQLite Database Architecture Section -->
+    <section id="database" class="py-16 border-b border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/70 border border-amber-800/50 text-xs text-amber-300 mb-3">
+                    <i class="fa-solid fa-database"></i> โครงสร้างฐานข้อมูล SQLite (`face_recognition.db`)
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                    การจัดเก็บเวกเตอร์ใบหน้า <span class="text-amber-400">SQLite Vector Database</span>
+                </h2>
+                <p class="mt-3 text-sm text-slate-400">
+                    เปลี่ยนจากการบันทึกไฟล์ Pickle (.pkl) สู่ระบบฐานข้อมูลเชิงสัมพันธ์แบบฝังตัว (Embedded Relational DB) ที่มีความทนทาน รองรับ ACID Transaction และค้นหาเวกเตอร์ได้อย่างรวดเร็ว
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Table 1: persons -->
+                <div class="p-6 rounded-2xl glass-card border border-slate-700/80">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="font-mono font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table text-cyan-400"></i> persons
+                        </div>
+                        <span class="text-[10px] font-mono text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">Master Table</span>
+                    </div>
+                    <div class="mt-4 space-y-2 text-xs font-mono">
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-amber-300 font-bold">id</span>
+                            <span class="text-slate-400">INTEGER PK AUTO</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">name</span>
+                            <span class="text-slate-400">TEXT UNIQUE</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">student_id</span>
+                            <span class="text-slate-400">TEXT</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">role</span>
+                            <span class="text-slate-400">TEXT</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">photo_path</span>
+                            <span class="text-slate-400">TEXT</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-slate-200">created_at</span>
+                            <span class="text-slate-400">DATETIME</span>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-400 leading-relaxed font-sans">
+                        เก็บข้อมูลประวัติของสมาชิกโครงงานและบุคคลทั่วไปที่ลงทะเบียนในระบบ
+                    </p>
+                </div>
+
+                <!-- Table 2: face_embeddings -->
+                <div class="p-6 rounded-2xl glass-card border border-slate-700/80 bg-gradient-to-b from-amber-950/10 to-slate-900/40">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="font-mono font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table text-amber-400"></i> face_embeddings
+                        </div>
+                        <span class="text-[10px] font-mono text-amber-300 bg-amber-950 px-2 py-0.5 rounded border border-amber-800">Vector Table</span>
+                    </div>
+                    <div class="mt-4 space-y-2 text-xs font-mono">
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-amber-300 font-bold">id</span>
+                            <span class="text-slate-400">INTEGER PK AUTO</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-purple-300">person_id</span>
+                            <span class="text-slate-400">INTEGER (FK)</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-emerald-400 font-bold">embedding_blob</span>
+                            <span class="text-emerald-300 font-semibold">BLOB (Float32)</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">embedding_json</span>
+                            <span class="text-slate-400">TEXT (JSON Array)</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">dim</span>
+                            <span class="text-slate-400">INTEGER (1000/128)</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-slate-200">mtcnn_confidence</span>
+                            <span class="text-slate-400">REAL</span>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-400 leading-relaxed font-sans">
+                        จัดเก็บเวกเตอร์ในรูปแบบ <strong>Float32 Binary BLOB</strong> ผ่าน <code class="text-amber-300">tobytes()</code> เพื่อโหลดเข้า NumPy ได้ทันทีแบบ Zero-Copy
+                    </p>
+                </div>
+
+                <!-- Table 3: recognition_logs -->
+                <div class="p-6 rounded-2xl glass-card border border-slate-700/80">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="font-mono font-bold text-sm text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table text-emerald-400"></i> recognition_logs
+                        </div>
+                        <span class="text-[10px] font-mono text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">Audit & Log</span>
+                    </div>
+                    <div class="mt-4 space-y-2 text-xs font-mono">
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-amber-300 font-bold">id</span>
+                            <span class="text-slate-400">INTEGER PK AUTO</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">timestamp</span>
+                            <span class="text-slate-400">DATETIME</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-slate-200">matched_name</span>
+                            <span class="text-slate-400">TEXT</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-emerald-300">similarity_score</span>
+                            <span class="text-slate-400">REAL</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-800/60">
+                            <span class="text-purple-300 font-bold">status</span>
+                            <span class="text-slate-400">KNOWN / UNKNOWN</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-slate-200">total_latency_ms</span>
+                            <span class="text-slate-400">REAL</span>
+                        </div>
+                    </div>
+                    <p class="mt-4 text-xs text-slate-400 leading-relaxed font-sans">
+                        บันทึกประวัติการสแกนทุกครั้งแบบ Debounced พร้อมค่า Latency ของแต่ละขั้นตอนเพื่อการตรวจสอบย้อนหลัง
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Cosine Similarity & Decision Section (Matching Slide 11 & Slide 12) -->
+    <section id="similarity" class="py-16 border-b border-slate-800/60 bg-slate-950/30">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="flex flex-col lg:flex-row items-center gap-12">
+                
+                <div class="lg:w-7/12">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-800/50 text-xs text-emerald-300 mb-3">
+                        <i class="fa-solid fa-calculator"></i> หลักคณิตศาสตร์เบื้องหลังการรู้จำใบหน้า
+                    </div>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                        การระบุตัวตนด้วย <span class="text-emerald-400">Cosine Similarity</span>
+                    </h2>
+                    <p class="mt-4 text-sm text-slate-300 leading-relaxed">
+                        เมื่อผ่าน MobileFaceNet เวกเตอร์ใบหน้าจะกลายเป็นพิกัดในมิติสูง (High-dimensional Space) 
+                        การเปรียบเทียบจะไม่วัดด้วยระยะห่างทางกายภาพ (Euclidean Distance) เพียงอย่างเดียว แต่วัด 
+                        <strong class="text-white font-medium">มุมองศา (&theta;) ระหว่างทิศทางของเวกเตอร์</strong>
+                    </p>
+
+                    <!-- Formula Box -->
+                    <div class="mt-6 p-5 rounded-xl bg-slate-900/90 border border-slate-700 font-mono text-center">
+                        <div class="text-xs text-slate-400 mb-2">สูตรการคำนวณ Cosine Similarity (และ $L_2\text{-Normalized}$ Dot Product)</div>
+                        <div class="text-lg sm:text-xl font-bold text-emerald-400 tracking-wide">
+                            \text{Cosine Similarity} = \cos(\theta) = \frac{\mathbf{A} \cdot \mathbf{B}}{\|\mathbf{A}\|_2 \|\mathbf{B}\|_2} = \mathbf{A} \cdot \mathbf{B}
+                        </div>
+                        <div class="text-[11px] text-slate-400 mt-2">
+                            *เนื่องจากเวกเตอร์ผ่าน $L_2\text{-Normalization}$ ทำให้ $\|\mathbf{A}\|_2 = 1$ และ $\|\mathbf{B}\|_2 = 1$ จึงคำนวณด้วย Dot Product ได้รวดเร็วระดับ Microseconds
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div class="p-3.5 rounded-xl glass-card border border-slate-800">
+                            <div class="font-bold text-emerald-300 flex items-center gap-1.5 mb-1">
+                                <i class="fa-solid fa-circle-check"></i> ค่าคะแนนใกล้ 1.0 (มุมเล็ก)
+                            </div>
+                            <p class="text-slate-400">เวกเตอร์ชี้ไปในทิศทางเดียวกัน แปลว่าใบหน้าเป็นของบุคคลเดียวกันอย่างแน่นอน</p>
+                        </div>
+                        <div class="p-3.5 rounded-xl glass-card border border-slate-800">
+                            <div class="font-bold text-red-300 flex items-center gap-1.5 mb-1">
+                                <i class="fa-solid fa-circle-xmark"></i> ค่าคะแนนต่ำกว่า 0.60 (มุมกว้าง)
+                            </div>
+                            <p class="text-slate-400">เวกเตอร์ชี้ไปคนละทิศทาง ระบบจะตัดสินใจเป็น <strong class="text-red-400">Unknown</strong> ทันที</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphic Comparison: Vector Angle -->
+                <div class="lg:w-5/12 w-full">
+                    <div class="p-6 rounded-2xl glass-card border border-slate-700 text-center">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Vector Direction Diagram</div>
+                        <svg class="w-full h-48 mx-auto" viewBox="0 0 300 180">
+                            <!-- Origin -->
+                            <circle cx="150" cy="150" r="4" fill="#38bdf8" />
+                            <text x="145" y="170" fill="#94a3b8" font-size="11">Origin (0,0)</text>
+
+                            <!-- Vector A (Query) -->
+                            <line x1="150" y1="150" x2="230" y2="50" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" />
+                            <circle cx="230" cy="50" r="5" fill="#38bdf8" />
+                            <text x="240" y="55" fill="#38bdf8" font-size="12" font-weight="bold">Vector A (Query Face)</text>
+
+                            <!-- Vector B (Enrolled - Match) -->
+                            <line x1="150" y1="150" x2="215" y2="40" stroke="#22c55e" stroke-width="3" stroke-linecap="round" />
+                            <circle cx="215" cy="40" r="5" fill="#22c55e" />
+                            <text x="140" y="30" fill="#22c55e" font-size="12" font-weight="bold">Vector B (Known)</text>
+
+                            <!-- Arc Theta -->
+                            <path d="M 180 112 A 45 45 0 0 0 178 102" fill="none" stroke="#f59e0b" stroke-width="2" />
+                            <text x="185" y="105" fill="#f59e0b" font-size="12" font-weight="bold">&theta; (Small angle &rarr; High Sim)</text>
+
+                            <!-- Vector C (Unknown Face) -->
+                            <line x1="150" y1="150" x2="50" y2="70" stroke="#f43f5e" stroke-width="2.5" stroke-dasharray="4" stroke-linecap="round" />
+                            <circle cx="50" cy="70" r="5" fill="#f43f5e" />
+                            <text x="20" y="60" fill="#f43f5e" font-size="11">Vector C (Unknown)</text>
+                        </svg>
+
+                        <div class="mt-2 text-xs font-mono text-slate-300">
+                            &theta; ใกล้ 0&deg; &rArr; <span class="text-emerald-400 font-bold">\cos(0&deg;) = 1.0 (Known)</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Simulator Section -->
+    <section id="simulator" class="py-16 border-b border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-3">
+                    <i class="fa-solid fa-sliders"></i> Interactive Tools
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                    เครื่องมือจำลองการทำงานของ <span class="gradient-text-cyan-green">ระบบรู้จำและ SQLite</span>
+                </h2>
+                <p class="mt-3 text-sm text-slate-400">
+                    ทดลองปรับค่า Threshold, จำลองการเปรียบเทียบ Cosine Similarity, และตรวจสอบข้อมูลในฐานข้อมูล SQLite
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Tool 1: Cosine Similarity Simulator -->
+                <div class="p-6 rounded-2xl glass-card border border-slate-700">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-flask-vial text-cyan-400"></i> Cosine Similarity Live Simulator
+                        </h3>
+                        <span class="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">Interactive</span>
+                    </div>
+
+                    <div class="mt-5 space-y-4">
+                        <!-- Select Person -->
+                        <div>
+                            <label class="text-xs font-semibold text-slate-300 mb-1 block">เลือกบุคคลในฐานข้อมูล (Enrolled Face in SQLite):</label>
+                            <select id="sim-person-select" onchange="runSimulation()" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded-lg p-2.5 outline-none focus:border-cyan-500">
+                                <option value="narawich">Narawich Anuwong (นราวิชญ์) - 68543206118-0</option>
+                                <option value="sanya">Sanya Lungjae (สัญญา) - 68543206057-0</option>
+                                <option value="warapakon">Warapakon Phimwong (วราปกรณ์) - 68543206123-0</option>
+                                <option value="stranger">Unknown Stranger (คนแปลกหน้า)</option>
+                            </select>
+                        </div>
+
+                        <!-- Face Variation Noise Slider -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-semibold">ความคลาดเคลื่อนของใบหน้า (แสง/มุมมอง/แว่นตา):</span>
+                                <span id="noise-val" class="font-mono text-cyan-400">10%</span>
+                            </div>
+                            <input type="range" id="noise-slider" min="0" max="60" value="10" oninput="runSimulation()" class="w-full accent-cyan-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer">
+                        </div>
+
+                        <!-- Threshold Slider -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300 font-semibold">ค่าเกณฑ์ตัดสินใจ (Similarity Threshold):</span>
+                                <span id="thresh-val" class="font-mono text-emerald-400">0.60</span>
+                            </div>
+                            <input type="range" id="thresh-slider" min="30" max="90" value="60" oninput="runSimulation()" class="w-full accent-emerald-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer">
+                        </div>
+
+                        <!-- Result Display Box -->
+                        <div id="sim-result-box" class="p-4 rounded-xl bg-slate-900/90 border border-emerald-500/40 mt-4 transition-all">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-slate-400">ผลการประมวลผล (Classification):</span>
+                                <span id="sim-status-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">KNOWN (รู้จัก)</span>
+                            </div>
+                            <div class="mt-2 flex items-baseline justify-between">
+                                <div id="sim-matched-name" class="text-lg font-bold text-white">Narawich Anuwong</div>
+                                <div class="text-right">
+                                    <div class="text-xs text-slate-400">Similarity Score</div>
+                                    <div id="sim-score-val" class="text-xl font-bold font-mono text-emerald-400">0.894</div>
+                                </div>
+                            </div>
+                            <!-- Progress Bar -->
+                            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-3">
+                                <div id="sim-progress-bar" class="bg-gradient-to-r from-cyan-500 to-emerald-500 h-full rounded-full transition-all duration-300" style="width: 89%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool 2: SQLite Enrolled Database Viewer -->
+                <div class="p-6 rounded-2xl glass-card border border-slate-700 flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-server text-amber-400"></i> SQLite Live Database Explorer
+                            </h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">face_recognition.db</span>
+                        </div>
+
+                        <div class="mt-4 overflow-x-auto">
+                            <table class="w-full text-left text-xs font-mono">
+                                <thead>
+                                    <tr class="border-b border-slate-800 text-slate-400">
+                                        <th class="py-2">ID</th>
+                                        <th class="py-2">ชื่อสมาชิก</th>
+                                        <th class="py-2">รหัสนักศึกษา</th>
+                                        <th class="py-2">เวกเตอร์</th>
+                                        <th class="py-2">MTCNN Conf</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                                    <tr>
+                                        <td class="py-2 text-amber-400 font-bold">1</td>
+                                        <td class="py-2 text-white font-sans">Narawich Anuwong (นราวิชญ์)</td>
+                                        <td class="py-2 text-cyan-400">68543206118-0</td>
+                                        <td class="py-2 text-emerald-400">1000-D BLOB</td>
+                                        <td class="py-2">0.9993</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-2 text-amber-400 font-bold">2</td>
+                                        <td class="py-2 text-white font-sans">Sanya Lungjae (สัญญา)</td>
+                                        <td class="py-2 text-cyan-400">68543206057-0</td>
+                                        <td class="py-2 text-emerald-400">1000-D BLOB</td>
+                                        <td class="py-2">0.9965</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-2 text-amber-400 font-bold">3</td>
+                                        <td class="py-2 text-white font-sans">Warapakon Phimwong (วราปกรณ์)</td>
+                                        <td class="py-2 text-cyan-400">68543206123-0</td>
+                                        <td class="py-2 text-emerald-400">1000-D BLOB</td>
+                                        <td class="py-2">0.9999</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Database Quick Query -->
+                    <div class="mt-5 p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
+                        <div class="text-[11px] font-mono text-slate-400 mb-1">// Python SQL Query for Vector Loading:</div>
+                        <code class="text-amber-300 font-mono text-[11px] block">
+                            SELECT p.name, e.embedding_blob FROM face_embeddings e JOIN persons p ON e.person_id = p.id;
+                        </code>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Benchmark & Comparison Section (Slide 16, 17, 18) -->
+    <section id="benchmarks" class="py-16 border-b border-slate-800/60 bg-slate-950/40">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-3">
+                    <i class="fa-solid fa-chart-line"></i> ผลการทดสอบและตัวชี้วัดประสิทธิภาพ
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                    การเปรียบเทียบประสิทธิภาพบน <span class="gradient-text-cyan-green">Raspberry Pi 5</span>
+                </h2>
+                <p class="mt-3 text-sm text-slate-400">
+                    วัดผลการทำงานจริงแยกตามขั้นตอน Pipeline และเปรียบเทียบสถาปัตยกรรม FP32 กับ INT8 Quantization
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                
+                <!-- Table -->
+                <div class="lg:col-span-7">
+                    <div class="p-6 rounded-2xl glass-card border border-slate-700 overflow-x-auto">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Pipeline Latency Breakdown (Per Frame)</span>
+                            <span class="text-emerald-400 font-mono">Tested on Raspberry Pi 5 / ARM64</span>
+                        </div>
+                        <table class="w-full text-left text-xs font-mono">
+                            <thead>
+                                <tr class="border-b border-slate-800 text-slate-400">
+                                    <th class="py-2.5">ขั้นตอนการประมวลผล (Stage)</th>
+                                    <th class="py-2.5 text-right">Latency (ms)</th>
+                                    <th class="py-2.5 text-right">สัดส่วนเวลา (%)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                                <tr>
+                                    <td class="py-2.5 text-cyan-300 font-semibold font-sans">1. MTCNN Face Detection & Align</td>
+                                    <td class="py-2.5 text-right font-bold">12.22 ms</td>
+                                    <td class="py-2.5 text-right text-slate-400">80.5%</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 text-emerald-300 font-semibold font-sans">2. MobileFaceNet Feature Extraction</td>
+                                    <td class="py-2.5 text-right font-bold">2.56 ms</td>
+                                    <td class="py-2.5 text-right text-slate-400">16.9%</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 text-amber-300 font-semibold font-sans">3. SQLite Vector Search & Cosine Match</td>
+                                    <td class="py-2.5 text-right font-bold">0.39 ms</td>
+                                    <td class="py-2.5 text-right text-slate-400">2.6%</td>
+                                </tr>
+                                <tr class="bg-slate-900/60 font-bold text-white">
+                                    <td class="py-3 text-emerald-400 font-sans">รวมเวลาทั้งหมด (Total End-to-End)</td>
+                                    <td class="py-3 text-right text-emerald-400 font-bold">15.17 ms</td>
+                                    <td class="py-3 text-right text-emerald-400">100.0% (65.9 FPS)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- FP32 vs INT8 Box -->
+                    <div class="mt-6 p-6 rounded-2xl glass-card border border-slate-700">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                            MobileFaceNet FP32 vs INT8 Quantization Comparison
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                            <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+                                <div class="text-[11px] text-slate-400">ขนาดไฟล์เดิม (FP32)</div>
+                                <div class="text-lg font-bold text-white font-mono mt-0.5">13.33 MB</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/70 border border-emerald-500/30">
+                                <div class="text-[11px] text-emerald-300">ขนาดไฟล์ใหม่ (INT8)</div>
+                                <div class="text-lg font-bold text-emerald-400 font-mono mt-0.5">3.45 MB</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+                                <div class="text-[11px] text-slate-400">ความเร็วเพิ่มขึ้น</div>
+                                <div class="text-lg font-bold text-cyan-400 font-mono mt-0.5">3.37 เท่า</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+                                <div class="text-[11px] text-slate-400">ความแม่นยำ LFW</div>
+                                <div class="text-lg font-bold text-purple-400 font-mono mt-0.5">99.38%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart.js Graph -->
+                <div class="lg:col-span-5">
+                    <div class="p-6 rounded-2xl glass-card border border-slate-700">
+                        <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
+                            Time Consumption Distribution
+                        </div>
+                        <div class="h-64 relative">
+                            <canvas id="benchmarkPieChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Source Code Reference & How to Run Section -->
+    <section id="code" class="py-16 border-b border-slate-800/60">
+        <div class="max-w-7xl mx-auto px-4 lg:px-8">
+            <div class="text-center max-w-3xl mx-auto mb-12">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/70 border border-cyan-800/50 text-xs text-cyan-300 mb-3">
+                    <i class="fa-solid fa-code"></i> ซอร์สโค้ดและวิธีการรันโปรแกรม
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-bold text-white font-outfit">
+                    ชุดคำสั่งและไฟล์โปรแกรม <span class="gradient-text-cyan-green">พร้อมใช้งาน</span>
+                </h2>
+                <p class="mt-3 text-sm text-slate-400">
+                    โครงสร้างไฟล์โปรแกรมถูกออกแบบให้เป็นระเบียบตามหลัก Modular Software Architecture
+                </p>
+            </div>
+
+            <!-- Code Tabs -->
+            <div class="rounded-2xl glass-card border border-slate-700 overflow-hidden">
+                <!-- Tab Header -->
+                <div class="flex flex-wrap border-b border-slate-800 bg-slate-950/60 px-4 pt-2 gap-2">
+                    <button onclick="switchTab('tab-db')" id="btn-tab-db" class="px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-cyan-500 text-white bg-slate-900/80 transition-all">database.py</button>
+                    <button onclick="switchTab('tab-engine')" id="btn-tab-engine" class="px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-white transition-all">face_engine.py</button>
+                    <button onclick="switchTab('tab-enroll')" id="btn-tab-enroll" class="px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-white transition-all">2_enroll_faces.py</button>
+                    <button onclick="switchTab('tab-rec')" id="btn-tab-rec" class="px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-white transition-all">3_realtime_recognition.py</button>
+                    <button onclick="switchTab('tab-eval')" id="btn-tab-eval" class="px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-white transition-all">4_benchmark_eval.py</button>
+                </div>
+
+                <!-- Tab Contents -->
+                <div class="p-6">
+                    <!-- Tab 1: database.py -->
+                    <div id="tab-db" class="code-tab-content">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <span class="text-slate-300 font-sans"><strong>database.py</strong>: จัดการเชื่อมต่อฐานข้อมูล SQLite, แปลง Float32 BLOB และค้นหา Cosine Similarity</span>
+                            <span class="text-slate-500 font-mono">SQLite3 / NumPy</span>
+                        </div>
+                        <pre><code class="language-python"># database.py (ตัวอย่างสำคัญ)
+class FaceDatabaseManager:
+    def __init__(self, db_path="face_recognition.db"):
+        self.db_path = db_path
+        self.init_db()
+
+    def register_person_with_embedding(self, name, embedding, student_id="", role="Student"):
+        # L2-Normalization
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
+
+        emb_blob = embedding.astype(np.float32).tobytes() # Float32 BLOB
+        # INSERT เข้า SQLite ...
+
+    def find_match(self, query_embedding, threshold=0.60):
+        # คำนวณ Dot Product กับทุกเวกเตอร์ใน SQLite
+        # score = float(np.dot(query_embedding, db_embedding))
+        # return matched_name, score, status ('KNOWN'/'UNKNOWN')</code></pre>
+                    </div>
+
+                    <!-- Tab 2: face_engine.py -->
+                    <div id="tab-engine" class="code-tab-content hidden">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <span class="text-slate-300 font-sans"><strong>face_engine.py</strong>: รัน MTCNN 3 ขั้นตอน (P-Net, R-Net, O-Net) พร้อมดึง 5 จุด Facial Landmarks และสกัดเวกเตอร์ด้วย MobileFaceNet</span>
+                            <span class="text-slate-500 font-mono">facenet_pytorch / cv2.dnn</span>
+                        </div>
+                        <pre><code class="language-python"># face_engine.py (ตัวอย่างสำคัญ)
+class FaceRecognitionPipeline:
+    def __init__(self):
+        self.detector = MTCNNDetector(image_size=112)
+        self.extractor = MobileFaceNetExtractor("mobilefacenet.onnx")
+        self.db = FaceDatabaseManager("face_recognition.db")
+
+    def process_frame(self, frame_bgr, threshold=0.60):
+        # 1. MTCNN Detect & Align 112x112
+        faces = self.detector.detect_and_align(frame_bgr)
+        for face in faces:
+            # 2. MobileFaceNet Feature Extraction
+            embedding = self.extractor.extract_embedding(face["aligned_face_bgr"])
+            # 3. SQLite Database Search
+            name, sim, pid, status = self.db.find_match(embedding, threshold)
+            # return results ...</code></pre>
+                    </div>
+
+                    <!-- Tab 3: 2_enroll_faces.py -->
+                    <div id="tab-enroll" class="code-tab-content hidden">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <span class="text-slate-300 font-sans"><strong>2_enroll_faces.py</strong>: ลงทะเบียนใบหน้าจากโฟลเดอร์ภาพ หรือถ่ายภาพสดผ่านกล้อง Webcam ด้วย MTCNN</span>
+                            <span class="text-slate-500 font-mono">CLI App</span>
+                        </div>
+                        <pre><code class="language-bash"># วิธีการรันลงทะเบียนใบหน้าเข้าสู่ SQLite Database
+# 1. ลงทะเบียนสมาชิกจากโฟลเดอร์ภาพอัตโนมัติ:
+python 2_enroll_faces.py --folder my_face_project/known_faces
+
+# 2. ลงทะเบียนสมาชิกใหม่ผ่านกล้อง Webcam:
+python 2_enroll_faces.py --camera --name "Somchai Jaidee" --student_id "68543200000-0"
+
+# 3. ดูรายชื่อสมาชิกทั้งหมดในฐานข้อมูล SQLite:
+python 2_enroll_faces.py --list</code></pre>
+                    </div>
+
+                    <!-- Tab 4: 3_realtime_recognition.py -->
+                    <div id="tab-rec" class="code-tab-content hidden">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <span class="text-slate-300 font-sans"><strong>3_realtime_recognition.py</strong>: รันระบบสแกนใบหน้า Real-time ผ่านกล้อง แสดงผล Bounding Box + 5 Landmarks + SQLite Search</span>
+                            <span class="text-slate-500 font-mono">Real-time Stream</span>
+                        </div>
+                        <pre><code class="language-bash"># วิธีการรันระบบสแกนใบหน้า Real-time
+python 3_realtime_recognition.py
+
+# ปุ่มควบคุมขณะรันกล้อง:
+# [Q] / [ESC] : ปิดโปรแกรม
+# [+] / [-]   : ปรับค่าเกณฑ์ Threshold ขึ้น/ลง สดๆ บนหน้าจอ
+# [S]         : บันทึกภาพ Snapshot หน้าจอ
+# [L]         : แสดงประวัติ Recognition Logs ล่าสุด 5 รายการจาก SQLite</code></pre>
+                    </div>
+
+                    <!-- Tab 5: 4_benchmark_eval.py -->
+                    <div id="tab-eval" class="code-tab-content hidden">
+                        <div class="flex items-center justify-between mb-3 text-xs">
+                            <span class="text-slate-300 font-sans"><strong>4_benchmark_eval.py</strong>: สคริปต์วัดความเร็วแยกตาม Stage และประเมินผลประสิทธิภาพสอดคล้องตามสไลด์ 16-18</span>
+                            <span class="text-slate-500 font-mono">Benchmark</span>
+                        </div>
+                        <pre><code class="language-bash"># วิธีการรัน Benchmark ทดสอบความเร็ว:
+python 4_benchmark_eval.py</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 bg-slate-950 border-t border-slate-800 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="font-semibold text-slate-300 text-sm mb-2">
+                Face Recognition on Raspberry Pi 5 (MobileFaceNet + INT8 Quantization + SQLite DB)
+            </div>
+            <p class="text-slate-400">
+                โครงงานวิศวกรรมคอมพิวเตอร์ ระดับปริญญาตรี | ผู้จัดทำ: นายนราวิชญ์ อนุวงศ์, นายสัญญา ลุงจาย, นายวราปกรณ์ พิมพ์วงษ์ | ที่ปรึกษา: ผศ.สมนึก สุระธง
+            </p>
+            <div class="mt-4 text-slate-600 font-mono text-[11px]">
+                Powered by MTCNN, MobileFaceNet INT8, OpenCV, SQLite3, and Raspberry Pi 5
+            </div>
+        </div>
+    </footer>
+
+    <!-- Interactive Scripts -->
+    <script>
+        // Tab switcher
+        function switchTab(tabId) {
+            document.querySelectorAll('.code-tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            const tabBtns = ['btn-tab-db', 'btn-tab-engine', 'btn-tab-enroll', 'btn-tab-rec', 'btn-tab-eval'];
+            tabBtns.forEach(bId => {
+                const btn = document.getElementById(bId);
+                btn.className = "px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-transparent text-slate-400 hover:text-white transition-all";
+            });
+
+            const activeBtn = document.getElementById('btn-' + tabId);
+            if (activeBtn) {
+                activeBtn.className = "px-4 py-2.5 text-xs font-mono font-bold rounded-t-lg border-b-2 border-cyan-500 text-white bg-slate-900/80 transition-all";
+            }
+        }
+
+        // Live Simulation logic
+        function runSimulation() {
+            const personSelect = document.getElementById('sim-person-select').value;
+            const noise = parseInt(document.getElementById('noise-slider').value, 10);
+            const thresh = parseInt(document.getElementById('thresh-slider').value, 10) / 100.0;
+
+            document.getElementById('noise-val').innerText = noise + '%';
+            document.getElementById('thresh-val').innerText = thresh.toFixed(2);
+
+            let baseScore = 0.96;
+            let personName = "Narawich Anuwong";
+
+            if (personSelect === "narawich") {
+                personName = "Narawich Anuwong (นราวิชญ์)";
+                baseScore = 0.98;
+            } else if (personSelect === "sanya") {
+                personName = "Sanya Lungjae (สัญญา)";
+                baseScore = 0.97;
+            } else if (personSelect === "warapakon" || personSelect === "warapakorn") {
+                personName = "Warapakon Phimwong (วราปกรณ์)";
+                baseScore = 0.99;
+            } else {
+                personName = "Unknown Stranger";
+                baseScore = 0.42;
+            }
+
+            // Calculate simulated score with noise
+            let finalScore = baseScore - (noise * 0.005);
+            if (personSelect === "stranger") {
+                finalScore = 0.35 + (noise * 0.002);
+            }
+            finalScore = Math.max(0.1, Math.min(0.999, finalScore));
+
+            const isKnown = (finalScore >= thresh && personSelect !== "stranger");
+
+            const statusBadge = document.getElementById('sim-status-badge');
+            const resultBox = document.getElementById('sim-result-box');
+            const matchedNameEl = document.getElementById('sim-matched-name');
+            const scoreValEl = document.getElementById('sim-score-val');
+            const progressBar = document.getElementById('sim-progress-bar');
+
+            scoreValEl.innerText = finalScore.toFixed(3);
+            progressBar.style.width = (finalScore * 100) + '%';
+
+            if (isKnown) {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                statusBadge.innerText = "KNOWN (รู้จัก)";
+                resultBox.className = "p-4 rounded-xl bg-slate-900/90 border border-emerald-500/40 mt-4 transition-all";
+                matchedNameEl.innerText = personName;
+                scoreValEl.className = "text-xl font-bold font-mono text-emerald-400";
+                progressBar.className = "bg-gradient-to-r from-cyan-500 to-emerald-500 h-full rounded-full transition-all duration-300";
+            } else {
+                statusBadge.className = "px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30";
+                statusBadge.innerText = "UNKNOWN (ไม่รู้จัก)";
+                resultBox.className = "p-4 rounded-xl bg-slate-900/90 border border-red-500/40 mt-4 transition-all";
+                matchedNameEl.innerText = "Unknown Person";
+                scoreValEl.className = "text-xl font-bold font-mono text-red-400";
+                progressBar.className = "bg-gradient-to-r from-amber-500 to-red-500 h-full rounded-full transition-all duration-300";
+            }
+        }
+
+        // Initialize Chart.js
+        window.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('benchmarkPieChart');
+            if (ctx) {
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['MTCNN Detection (12.22ms)', 'MobileFaceNet (2.56ms)', 'SQLite Search (0.39ms)'],
+                        datasets: [{
+                            data: [12.22, 2.56, 0.39],
+                            backgroundColor: ['#38bdf8', '#22c55e', '#f59e0b'],
+                            borderColor: '#0b0f19',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#cbd5e1',
+                                    font: { family: 'Prompt', size: 11 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
