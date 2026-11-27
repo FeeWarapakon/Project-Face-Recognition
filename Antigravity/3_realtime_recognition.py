@@ -1337,6 +1337,8 @@ class RealTimeFaceRecognitionApp:
         self.latest_jpeg_bytes = None
         self.latest_raw_jpeg_bytes = None
         self.latest_raw_frame = None
+        self._video_clients = 0
+        self._raw_video_clients = 0
         self.latest_face_data = None
         self.telemetry = {
             "cam_fps": 0.0,
@@ -1419,30 +1421,38 @@ class RealTimeFaceRecognitionApp:
         def video_feed():
             """สตรีมภาพวิดีโอแบบ Multipart MJPEG Stream (พร้อมกรอบตรวจจับ AI & HUD)"""
             def generate_mjpeg():
-                while self.running:
-                    with self.new_frame_cond:
-                        self.new_frame_cond.wait(timeout=0.1)
-                        data = self.latest_jpeg_bytes
-                    if data is not None:
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
-                    else:
-                        time.sleep(0.03)
+                self._video_clients += 1
+                try:
+                    while self.running:
+                        with self.new_frame_cond:
+                            self.new_frame_cond.wait(timeout=0.1)
+                            data = self.latest_jpeg_bytes
+                        if data is not None:
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
+                        else:
+                            time.sleep(0.03)
+                finally:
+                    self._video_clients = max(0, self._video_clients - 1)
             return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
         @flask_app.route('/api/raw_video_feed')
         def raw_video_feed():
             """สตรีมภาพสดจากกล้องต้นฉบับ Original Raw Frame (ไม่มีกรอบ MTCNN หรือ HUD)"""
             def generate_raw_mjpeg():
-                while self.running:
-                    with self.new_frame_cond:
-                        self.new_frame_cond.wait(timeout=0.1)
-                        data = self.latest_raw_jpeg_bytes
-                    if data is not None:
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
-                    else:
-                        time.sleep(0.03)
+                self._raw_video_clients += 1
+                try:
+                    while self.running:
+                        with self.new_frame_cond:
+                            self.new_frame_cond.wait(timeout=0.1)
+                            data = self.latest_raw_jpeg_bytes
+                        if data is not None:
+                            yield (b'--frame\r\n'
+                                   b'Content-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
+                        else:
+                            time.sleep(0.03)
+                finally:
+                    self._raw_video_clients = max(0, self._raw_video_clients - 1)
             return Response(generate_raw_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
         @flask_app.route('/api/status')
@@ -2068,52 +2078,58 @@ class RealTimeFaceRecognitionApp:
                 cv2.putText(frame, hud_text, (6 if is_vga else 12, bar_height - (10 if is_vga else 14)),
                             cv2.FONT_HERSHEY_SIMPLEX, hud_font_scale, (0, 255, 255), 1, cv2.LINE_AA)
 
-                # แปลงเฟรมเป็น JPEG สำหรับการสตรีมผ่าน Web Server (Single Encode < 2ms)
+                # แปลงเฟรมเป็น JPEG แบบ On-Demand (บีบอัดเฉพาะตอนที่มี Client เปิดดูสตรีม เพื่อลดภาระ CPU บน Pi)
                 if self.enable_web:
-                    ret_jpg, jpeg_buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-                    if ret_jpg:
-                        jpeg_bytes = jpeg_buf.tobytes()
-                        # Encode raw clean frame for registration / clean feed
-                        ret_raw, raw_buf = cv2.imencode('.jpg', raw_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
-                        raw_bytes = raw_buf.tobytes() if ret_raw else jpeg_bytes
+                    jpeg_bytes = None
+                    raw_bytes = None
+                    if self._video_clients > 0:
+                        ret_jpg, jpeg_buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                        if ret_jpg:
+                            jpeg_bytes = jpeg_buf.tobytes()
+                    if self._raw_video_clients > 0:
+                        ret_raw, raw_buf = cv2.imencode('.jpg', raw_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                        if ret_raw:
+                            raw_bytes = raw_buf.tobytes()
 
-                        with self.new_frame_cond:
+                    with self.new_frame_cond:
+                        if jpeg_bytes is not None:
                             self.latest_jpeg_bytes = jpeg_bytes
+                        if raw_bytes is not None:
                             self.latest_raw_jpeg_bytes = raw_bytes
-                            self.latest_raw_frame = raw_frame
-                            active_ui_faces = render_faces if render_faces else detected_faces
-                            if active_ui_faces:
-                                best_face = max(active_ui_faces, key=lambda f: f["sim_score"])
-                                self.latest_face_data = {
-                                    "name": best_face["matched_name"],
-                                    "similarity": round(best_face["sim_score"], 3),
-                                    "confidence": round(best_face["mtcnn_conf"], 3),
-                                    "status": best_face["status"],
-                                    "is_real": best_face.get("is_real", True),
-                                    "liveness_score": round(best_face.get("liveness_score", 1.0), 3),
-                                    "attack_type": best_face.get("attack_type", "GENUINE_LIVE"),
-                                    "person_id": best_face.get("person_id", None),
-                                    "student_id": best_face.get("student_id") or "-",
-                                    "role": best_face.get("role") or "-",
-                                    "face_crop_base64": best_face.get("face_crop_base64", None),
-                                    "latency_ms": round(best_face["latency_ms"], 1),
-                                    "timestamp": time.strftime("%H:%M:%S")
-                                }
-                            else:
-                                self.latest_face_data = None
-                            self.telemetry = {
-                                "cam_fps": round(cam_fps, 1),
-                                "display_fps": round(display_fps_smooth, 1),
-                                "latency": {k: round(v, 2) for k, v in lat_stats.items()},
-                                "resolution": res_str,
-                                "enrolled_count": enrolled_count,
-                                "threshold": round(self.threshold, 2),
-                                "clarity": self.enable_clarity,
-                                "color_swap": self.color_swap,
-                                "auto_wb": self.auto_wb,
-                                "antispoof": self.enable_antispoof
+                        self.latest_raw_frame = raw_frame
+                        active_ui_faces = render_faces if render_faces else detected_faces
+                        if active_ui_faces:
+                            best_face = max(active_ui_faces, key=lambda f: f["sim_score"])
+                            self.latest_face_data = {
+                                "name": best_face["matched_name"],
+                                "similarity": round(best_face["sim_score"], 3),
+                                "confidence": round(best_face["mtcnn_conf"], 3),
+                                "status": best_face["status"],
+                                "is_real": best_face.get("is_real", True),
+                                "liveness_score": round(best_face.get("liveness_score", 1.0), 3),
+                                "attack_type": best_face.get("attack_type", "GENUINE_LIVE"),
+                                "person_id": best_face.get("person_id", None),
+                                "student_id": best_face.get("student_id") or "-",
+                                "role": best_face.get("role") or "-",
+                                "face_crop_base64": best_face.get("face_crop_base64", None),
+                                "latency_ms": round(best_face["latency_ms"], 1),
+                                "timestamp": time.strftime("%H:%M:%S")
                             }
-                            self.new_frame_cond.notify_all()
+                        else:
+                            self.latest_face_data = None
+                        self.telemetry = {
+                            "cam_fps": round(cam_fps, 1),
+                            "display_fps": round(display_fps_smooth, 1),
+                            "latency": {k: round(v, 2) for k, v in lat_stats.items()},
+                            "resolution": res_str,
+                            "enrolled_count": enrolled_count,
+                            "threshold": round(self.threshold, 2),
+                            "clarity": self.enable_clarity,
+                            "color_swap": self.color_swap,
+                            "auto_wb": self.auto_wb,
+                            "antispoof": self.enable_antispoof
+                        }
+                        self.new_frame_cond.notify_all()
 
                 # แสดงผลผ่านหน้าต่าง OpenCV Desktop (หากไม่ได้เปิด headless)
                 if not self.headless:

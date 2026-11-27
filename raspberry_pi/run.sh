@@ -60,10 +60,11 @@ while true; do
     echo "   [3] รัน 3_realtime_recognition.py (AI Engine บน Port 5000)"
     echo "   [4] รันเว็บ npm run dev         (Dashboard บน Port 5173)"
     echo "   [5] รันทั้งคู่พร้อมกัน          (AI Engine + Web Dashboard)"
+    echo "   [6] Build & รัน C++ Native     (เร็วสุด! Zero-Copy สำหรับ Pi 3 / Pi 5)"
     echo "   [0] ออกจากโปรแกรม (Exit)"
     echo ""
     echo "========================================================"
-    read -p "กรุณาเลือกหมายเลข [1, 2, 3, 4, 5 หรือ 0]: " choice
+    read -p "กรุณาเลือกหมายเลข [1-6 หรือ 0]: " choice
 
     case $choice in
         1)
@@ -146,6 +147,23 @@ while true; do
             cleanup_dual
             read -p "กด Enter เพื่อกลับสู่เมนูหลัก..."
             ;;
+        6)
+            echo ""
+            echo "[*] กำลังตรวจสอบ/คอมไพล์ C++ Native Engine..."
+            cd "$ROOT_DIR/cpp"
+            if [ ! -f "build/face_recognition_native" ]; then
+                chmod +x build_pi.sh
+                ./build_pi.sh
+            fi
+            TOTAL_MEM_MB=$(free -m | awk '/^Mem:/{print $2}')
+            if [ "$TOTAL_MEM_MB" -lt 1500 ]; then
+                echo "[*] ตรวจพบบอร์ด RAM ต่ำ (${TOTAL_MEM_MB} MB, เช่น Pi 3) -> เปิดโหมด --pi3"
+                ./build/face_recognition_native --pi3
+            else
+                ./build/face_recognition_native
+            fi
+            read -p "กด Enter เพื่อกลับสู่เมนูหลัก..."
+            ;;
         0)
             echo "ออกจากโปรแกรมเรียบร้อยแล้ว"
             fuser -k 5000/tcp 2>/dev/null
@@ -153,7 +171,7 @@ while true; do
             exit 0
             ;;
         *)
-            echo "[!] เลือกไม่ถูกต้อง กรุณาเลือก 1, 2, 3, 4, 5 หรือ 0"
+            echo "[!] เลือกไม่ถูกต้อง กรุณาเลือก 1-6 หรือ 0"
             sleep 1
             ;;
     esac

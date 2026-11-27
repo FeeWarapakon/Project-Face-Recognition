@@ -39,5 +39,14 @@ Thumbs.db
 *.swp
 *~
 
+# C++ Build Outputs & Native Binaries
+cpp/build/
+*.exe
+*.out
+*.o
+*.obj
+CMakeFiles/
+CMakeCache.txt
+
 # Model Cache & Very Large Unused Models (>50MB)
 Antigravity/facenet_512d.onnx
