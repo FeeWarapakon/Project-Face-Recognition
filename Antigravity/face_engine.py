@@ -29,11 +29,15 @@ if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
     except Exception:
         pass
 
-# พาทโมเดล MobileFaceNet
+# พาทโมเดล MobileFaceNet (ให้ความสำคัญกับ INT8 Quantized Model ก่อนเพื่อความเร็วสูงสุดบน Edge Device)
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "my_face_project", "models")
-DEFAULT_ONNX_PATH = os.path.join(MODEL_DIR, "mobilefacenet.onnx")
-if not os.path.exists(DEFAULT_ONNX_PATH):
-    DEFAULT_ONNX_PATH = os.path.join(os.path.dirname(__file__), "mobilefacenet.onnx")
+_default_candidates = [
+    os.path.join(os.path.dirname(__file__), "mobilefacenet_int8.onnx"),
+    os.path.join(MODEL_DIR, "mobilefacenet_int8.onnx"),
+    os.path.join(os.path.dirname(__file__), "mobilefacenet.onnx"),
+    os.path.join(MODEL_DIR, "mobilefacenet.onnx"),
+]
+DEFAULT_ONNX_PATH = next((p for p in _default_candidates if os.path.exists(p)), os.path.join(os.path.dirname(__file__), "mobilefacenet.onnx"))
 
 
 # พิกัด Landmark อ้างอิงมาตรฐาน 5 จุด (Canonical 112x112 ArcFace / InsightFace Template)
@@ -252,13 +256,17 @@ class MobileFaceNetExtractor:
         self.input_name = None
         self.input_shape = (112, 112)
 
-        # ค้นหาไฟล์โมเดล MobileFaceNet ONNX
-        mfn_candidates = [
+        # ค้นหาไฟล์โมเดล MobileFaceNet ONNX (ลำดับความสำคัญ: model_path ที่ระบุ -> INT8 -> FP32)
+        mfn_candidates = []
+        if model_path:
+            mfn_candidates.append(model_path)
+        mfn_candidates.extend([
+            os.path.join(os.path.dirname(__file__), "mobilefacenet_int8.onnx"),
+            os.path.join(MODEL_DIR, "mobilefacenet_int8.onnx"),
             os.path.join(os.path.dirname(__file__), "mobilefacenet.onnx"),
             os.path.join(MODEL_DIR, "mobilefacenet.onnx"),
             os.path.join(os.path.dirname(__file__), "facenet_512d.onnx"),
-            model_path
-        ]
+        ])
         target_onnx = None
         for p in mfn_candidates:
             if p and os.path.exists(p):
@@ -277,7 +285,9 @@ class MobileFaceNetExtractor:
                 shape = self.ort_sess.get_inputs()[0].shape
                 if len(shape) == 4 and shape[2] and shape[3]:
                     self.input_shape = (int(shape[3]), int(shape[2]))
-                print(f"[OK] โหลดโมเดล Face Feature Extractor (MobileFaceNet ONNX Runtime) สำเร็จ: {os.path.basename(target_onnx)} (Input: {self.input_shape})")
+                is_int8 = "int8" in os.path.basename(target_onnx).lower()
+                mtype = "INT8 Quantized" if is_int8 else "FP32"
+                print(f"[OK] โหลดโมเดล Face Feature Extractor ({mtype} MobileFaceNet ONNX Runtime) สำเร็จ: {os.path.basename(target_onnx)} (Input: {self.input_shape})")
             except Exception as e:
                 # 2. ลองใช้ OpenCV DNN readNetFromONNX (ไม่ต้องใช้แพ็กเกจ onnxruntime เพิ่ม)
                 try:
