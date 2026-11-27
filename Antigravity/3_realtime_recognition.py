@@ -370,16 +370,16 @@ class ThreadedCamera:
 
 class RealtimeFaceTracker:
     """
-    High-Precision Neural Face Tracker:
-    - ติดตามตำแหน่งใบหน้าจาก Deep AI Detector (YuNet / MTCNN)
-    - ใช้ IoU Multi-Face Matching + Exponential Moving Average (alpha=0.82) เพื่อกรอบที่นุ่มนวล ไม่กระตุก ไม่สั่น
-    - ป้องกันการหลุดตามมือ/วัตถุอื่น (ไม่พึ่งพา Template Matching ของพิกเซลทั่วไป)
-    - เมื่อใบหน้าถูกบดบังหรือหลุดออกจากเฟรม จะลบกรอบทิ้งอย่างรวดเร็ว (decay_sec = 0.25s)
+    High-Precision Neural Face Tracker with Lucas-Kanade Optical Flow:
+    - ติดตามตำแหน่งใบหน้าแบบ Real-time ตามอัตราเฟรมกล้อง (30-60 FPS) ด้วย Sparse Optical Flow
+    - กรอบไหลติดใบหน้าทันทีแบบ Zero-Lag ทุกเฟรม แม้ AI Worker จะกำลังประมวลผลอยู่
+    - ฟิวชันระหว่าง Deep AI Detector (YuNet) และ Optical Flow เพื่อความแม่นยำสูงสุด
     """
-    def __init__(self, decay_sec: float = 0.25):
-        self.tracks = {}  # {track_id: {"box": (x1, y1, x2, y2), "landmarks": [...], "info": dict, "last_seen": float}}
+    def __init__(self, decay_sec: float = 0.50):
+        self.tracks = {}  # {track_id: {"box": (x1, y1, x2, y2), "landmarks": [...], "pts": np.ndarray, "info": dict, "last_seen": float}}
         self.decay_sec = decay_sec
         self.next_id = 1
+        self.prev_gray = None
 
     def _iou(self, boxA, boxB):
         xA, yA = max(boxA[0], boxB[0]), max(boxA[1], boxB[1])
@@ -389,10 +389,62 @@ class RealtimeFaceTracker:
         areaB = max(1, (boxB[2] - boxB[0]) * (boxB[3] - boxB[1]))
         return inter / float(areaA + areaB - inter)
 
+    def _generate_feature_pts(self, box, landmarks):
+        """สร้างจุด Feature Points สำหรับ Optical Flow ให้เกาะติดใบหน้าแน่นหนึบ"""
+        x1, y1, x2, y2 = box
+        w_b, h_b = max(10, x2 - x1), max(10, y2 - y1)
+        cx, cy = (x1 + x2) * 0.5, (y1 + y2) * 0.5
+
+        pts = []
+        if landmarks and len(landmarks) == 5:
+            for pt in landmarks:
+                pts.append([float(pt[0]), float(pt[1])])
+        pts.extend([
+            [cx, cy],
+            [cx, y1 + h_b * 0.25],
+            [cx, y2 - h_b * 0.25],
+            [x1 + w_b * 0.25, cy],
+            [x2 - w_b * 0.25, cy],
+        ])
+        return np.array(pts, dtype=np.float32).reshape(-1, 1, 2)
+
     def update_frame(self, frame_bgr: np.ndarray, detections: Optional[list] = None):
         now = time.perf_counter()
+        h, w = frame_bgr.shape[:2]
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         active_faces = []
 
+        # 1. Optical Flow Tracking: เลื่อนกรอบตามการเคลื่อนไหวจริงของใบหน้าในทุกๆ เฟรมกล้อง (Zero-Lag 60 FPS)
+        if self.prev_gray is not None and self.tracks:
+            for tid, trk in list(self.tracks.items()):
+                pts = trk.get("pts")
+                if pts is not None and len(pts) >= 3:
+                    try:
+                        new_pts, status, _ = cv2.calcOpticalFlowPyrLK(
+                            self.prev_gray, gray, pts, None,
+                            winSize=(15, 15), maxLevel=2,
+                            criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03)
+                        )
+                        good = (status.flatten() == 1)
+                        if np.sum(good) >= 3:
+                            dx = float(np.median(new_pts[good, 0, 0] - pts[good, 0, 0]))
+                            dy = float(np.median(new_pts[good, 0, 1] - pts[good, 0, 1]))
+                            # เลื่อนตำแหน่งกรอบและ landmark ไปตามการขยับของใบหน้าทันที
+                            x1, y1, x2, y2 = trk["box"]
+                            trk["box"] = (
+                                int(max(0, min(w - 1, x1 + dx))),
+                                int(max(0, min(h - 1, y1 + dy))),
+                                int(max(0, min(w, x2 + dx))),
+                                int(max(0, min(h, y2 + dy)))
+                            )
+                            lms = trk.get("landmarks", [])
+                            if lms:
+                                trk["landmarks"] = [[round(p[0] + dx, 1), round(p[1] + dy, 1)] for p in lms]
+                            trk["pts"] = new_pts[good].reshape(-1, 1, 2)
+                    except Exception:
+                        pass
+
+        # 2. ฟิวชันกับผลตรวจจับล่าสุดจาก Deep AI (เมื่อ AI ส่งผลใหม่มา)
         if detections is not None:
             used_track_ids = set()
             for det in detections:
@@ -409,15 +461,13 @@ class RealtimeFaceTracker:
 
                 raw_lms = det.get("landmarks", [])
 
-                if best_id is not None and best_iou >= 0.20:
+                if best_id is not None and best_iou >= 0.15:
                     trk = self.tracks[best_id]
                     used_track_ids.add(best_id)
                     b_box = trk["box"]
 
-                    # Adaptive alpha: fast response when moving fast, smooth when still
-                    dist = ((det_box[0] - b_box[0])**2 + (det_box[1] - b_box[1])**2)**0.5
-                    alpha = 0.90 if dist > 20 else 0.80
-
+                    # Smooth blend between Optical Flow tracked box and Deep AI box
+                    alpha = 0.70
                     smooth_box = (
                         int(round(alpha * det_box[0] + (1 - alpha) * b_box[0])),
                         int(round(alpha * det_box[1] + (1 - alpha) * b_box[1])),
@@ -439,6 +489,7 @@ class RealtimeFaceTracker:
                     trk["landmarks"] = smooth_lms
                     trk["info"] = det
                     trk["last_seen"] = now
+                    trk["pts"] = self._generate_feature_pts(smooth_box, smooth_lms)
                 else:
                     tid = self.next_id
                     self.next_id += 1
@@ -447,10 +498,14 @@ class RealtimeFaceTracker:
                         "box": tuple(det_box),
                         "landmarks": raw_lms,
                         "info": det,
-                        "last_seen": now
+                        "last_seen": now,
+                        "pts": self._generate_feature_pts(det_box, raw_lms)
                     }
 
-        # ลบแทร็กที่ไม่มีการตรวจพบใบหน้าเกิน decay_sec (เช่น เอามือบังหน้า หรือหันหน้าหนี)
+        # บันทึกภาพ grayscale สำหรับคำนวณ Optical Flow ในเฟรมถัดไป
+        self.prev_gray = gray
+
+        # ลบแทร็กที่ไม่มีการตรวจพบใบหน้าเกิน decay_sec
         for tid, trk in list(self.tracks.items()):
             if now - trk["last_seen"] > self.decay_sec:
                 del self.tracks[tid]
@@ -626,11 +681,11 @@ class AsyncFaceRecognitionWorker:
             now_ts = time.perf_counter()
             h, w = frame_to_proc.shape[:2]
 
-            # ปรับสเกลภาพให้พอดีสำหรับการตรวจจับ (YuNet รัน 640px ได้เต็มสปีด 20ms)
+            # ปรับสเกลภาพให้พอดีสำหรับการตรวจจับ (ปรับเป็น 400px เพื่อให้ YuNet บน Pi 5 ตรวจจับเสร็จใน 15-20ms)
             if getattr(self.detector, 'backend', '') == 'yunet':
-                target_w = 640
-            else:
                 target_w = 400
+            else:
+                target_w = 320
 
             scale = target_w / float(w) if w > target_w else 1.0
             if scale < 1.0:
