@@ -4,6 +4,7 @@
 #include "face_tracker.hpp"
 #include "types.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -175,12 +176,14 @@ int main(int argc, char** argv) {
     std::mutex ai_in_mtx;
     std::condition_variable ai_in_cv;
     cv::Mat ai_pending_frame;
+    uint64_t ai_pending_seq = 0;
     bool ai_has_frame = false;
 
     // AI Worker Thread -> Main Thread
     std::mutex ai_out_mtx;
     std::vector<fr::TrackedFace> ai_latest_faces;
     uint64_t ai_result_seq = 0;
+    uint64_t ai_result_frame_seq = 0;
     double ai_total_ms = 0.0;
 
     // 3. Dedicated Camera Capture Thread (Zero I/O Blocking)
@@ -209,21 +212,42 @@ int main(int argc, char** argv) {
         }
     });
 
-    // 4. Dedicated AI Inference Worker Thread (YuNet + MobileFaceNet INT8 + SQLite)
+    // 4. Dedicated AI Inference Worker Thread (YuNet + Cached MobileFaceNet INT8 + SQLite)
     std::thread ai_thread([&]() {
+        struct RecCacheEntry {
+            cv::Rect box;
+            fr::MatchResult match;
+            Clock::time_point last_rec;
+            Clock::time_point last_seen;
+        };
+        std::vector<RecCacheEntry> rec_cache;
+
+        auto rectIoU = [](const cv::Rect& a, const cv::Rect& b) -> float {
+            const int x1 = std::max(a.x, b.x);
+            const int y1 = std::max(a.y, b.y);
+            const int x2 = std::min(a.x + a.width, b.x + b.width);
+            const int y2 = std::min(a.y + a.height, b.y + b.height);
+            const int inter = std::max(0, x2 - x1) * std::max(0, y2 - y1);
+            const int uni = std::max(1, a.area() + b.area() - inter);
+            return static_cast<float>(inter) / static_cast<float>(uni);
+        };
+
         while (running.load()) {
             cv::Mat work_frame;
+            uint64_t work_seq = 0;
             {
                 std::unique_lock<std::mutex> lock(ai_in_mtx);
-                ai_in_cv.wait_for(lock, std::chrono::milliseconds(20), [&]() {
+                ai_in_cv.wait_for(lock, std::chrono::milliseconds(15), [&]() {
                     return ai_has_frame || !running.load();
                 });
                 if (!running.load()) break;
                 if (!ai_has_frame) continue;
                 work_frame = std::move(ai_pending_frame);
+                work_seq = ai_pending_seq;
                 ai_has_frame = false;
             }
 
+            const auto now_ai = Clock::now();
             const auto t0 = Clock::now();
             auto dets = detector.detect(work_frame, cfg.detect_width);
             const auto t1 = Clock::now();
@@ -235,24 +259,58 @@ int main(int argc, char** argv) {
             double sum_match_ms = 0.0;
 
             for (const auto& det : dets) {
-                const auto te0 = Clock::now();
-                cv::Mat aligned;
-                if (det.has_landmarks) {
-                    aligned = fr::FaceDetector::alignFace5Pts(work_frame, det.landmarks, 112);
-                } else {
-                    cv::resize(work_frame(det.box), aligned, cv::Size(112, 112));
+                // Check if this face was already recognized recently (re-verify every 2.0s)
+                int cache_idx = -1;
+                float best_iou = 0.0f;
+                for (size_t c = 0; c < rec_cache.size(); ++c) {
+                    const float iou = rectIoU(det.box, rec_cache[c].box);
+                    if (iou > best_iou) {
+                        best_iou = iou;
+                        cache_idx = static_cast<int>(c);
+                    }
                 }
-                auto emb = recognizer.extractEmbedding(aligned);
-                const auto te1 = Clock::now();
 
-                const auto tm0 = Clock::now();
-                auto match = db.findMatch(emb, cfg.threshold);
-                const auto tm1 = Clock::now();
+                fr::MatchResult match;
+                double embed_ms = 0.0;
+                double match_ms = 0.0;
 
-                const double embed_ms = std::chrono::duration<double, std::milli>(te1 - te0).count();
-                const double match_ms = std::chrono::duration<double, std::milli>(tm1 - tm0).count();
-                sum_embed_ms += embed_ms;
-                sum_match_ms += match_ms;
+                const bool can_reuse = (cache_idx >= 0 && best_iou >= 0.25f &&
+                                        rec_cache[cache_idx].match.status == "KNOWN" &&
+                                        std::chrono::duration<double>(now_ai - rec_cache[cache_idx].last_rec).count() < 2.0);
+
+                if (can_reuse) {
+                    match = rec_cache[cache_idx].match;
+                    rec_cache[cache_idx].box = det.box;
+                    rec_cache[cache_idx].last_seen = now_ai;
+                } else {
+                    const auto te0 = Clock::now();
+                    cv::Mat aligned;
+                    if (det.has_landmarks) {
+                        aligned = fr::FaceDetector::alignFace5Pts(work_frame, det.landmarks, 112);
+                    } else {
+                        cv::resize(work_frame(det.box), aligned, cv::Size(112, 112));
+                    }
+                    auto emb = recognizer.extractEmbedding(aligned);
+                    const auto te1 = Clock::now();
+
+                    const auto tm0 = Clock::now();
+                    match = db.findMatch(emb, cfg.threshold);
+                    const auto tm1 = Clock::now();
+
+                    embed_ms = std::chrono::duration<double, std::milli>(te1 - te0).count();
+                    match_ms = std::chrono::duration<double, std::milli>(tm1 - tm0).count();
+                    sum_embed_ms += embed_ms;
+                    sum_match_ms += match_ms;
+
+                    if (cache_idx >= 0 && best_iou >= 0.25f) {
+                        rec_cache[cache_idx].box = det.box;
+                        rec_cache[cache_idx].match = match;
+                        rec_cache[cache_idx].last_rec = now_ai;
+                        rec_cache[cache_idx].last_seen = now_ai;
+                    } else {
+                        rec_cache.push_back({det.box, match, now_ai, now_ai});
+                    }
+                }
 
                 fr::TrackedFace tf;
                 tf.box = det.box;
@@ -266,10 +324,19 @@ int main(int argc, char** argv) {
                 results.push_back(std::move(tf));
             }
 
+            // Prune stale cache entries (> 2.5s unseen)
+            rec_cache.erase(
+                std::remove_if(rec_cache.begin(), rec_cache.end(), [&](const RecCacheEntry& e) {
+                    return std::chrono::duration<double>(now_ai - e.last_seen).count() > 2.5;
+                }),
+                rec_cache.end()
+            );
+
             {
                 std::lock_guard<std::mutex> lock(ai_out_mtx);
                 ai_latest_faces = std::move(results);
                 ai_result_seq++;
+                ai_result_frame_seq = work_seq;
                 ai_total_ms = detect_ms + sum_embed_ms + sum_match_ms;
             }
         }
@@ -309,17 +376,19 @@ int main(int argc, char** argv) {
         }
         last_cam_seq = cur_seq;
 
-        // Push latest frame to AI worker (non-blocking)
+        // Push latest frame (with exact sequence tag) to AI worker (non-blocking)
         {
             std::lock_guard<std::mutex> lock(ai_in_mtx);
             ai_pending_frame = frame.clone();
+            ai_pending_seq = cur_seq;
             ai_has_frame = true;
         }
         ai_in_cv.notify_one();
 
-        // Fetch latest AI results
+        // Fetch latest AI results (with originating frame_seq for Delay Compensation)
         std::vector<fr::TrackedFace> ai_faces;
         bool has_new_ai = false;
+        uint64_t res_frame_seq = cur_seq;
         double cur_ai_ms = 0.0;
         {
             std::lock_guard<std::mutex> lock(ai_out_mtx);
@@ -327,12 +396,13 @@ int main(int argc, char** argv) {
             if (ai_result_seq != last_ai_seq) {
                 ai_faces = ai_latest_faces;
                 last_ai_seq = ai_result_seq;
+                res_frame_seq = ai_result_frame_seq;
                 has_new_ai = true;
             }
         }
 
-        // Update Zero-Lag Optical Flow Tracker on EVERY camera frame (< 1.5 ms)
-        auto active_faces = tracker.updateFrame(frame, ai_faces, has_new_ai);
+        // Update Delay-Compensated Optical Flow Tracker on EVERY camera frame (< 1.5 ms)
+        auto active_faces = tracker.updateFrame(frame, cur_seq, ai_faces, res_frame_seq, has_new_ai);
 
         // Compute Display FPS
         const auto now = Clock::now();

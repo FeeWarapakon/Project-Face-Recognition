@@ -11,6 +11,7 @@ FaceRecognizer::FaceRecognizer() = default;
 FaceRecognizer::~FaceRecognizer() = default;
 
 bool FaceRecognizer::init(const std::string& model_dir, int num_threads) {
+    (void)num_threads;
     const std::string int8_path = (fs::path(model_dir) / "mobilefacenet_int8.onnx").string();
     const std::string fp32_path = (fs::path(model_dir) / "mobilefacenet.onnx").string();
 
