@@ -43,12 +43,30 @@ struct EmbeddingRecord {
     std::vector<float> embedding; // L2-normalized 128-d vector
 };
 
+struct PersonSummary {
+    int id = -1;
+    std::string name;
+    std::string student_id;
+    std::string role;
+    int embedding_count = 0;
+    std::string created_at;
+};
+
+struct RecognitionLogEntry {
+    int id = -1;
+    std::string timestamp;
+    std::string matched_name;
+    float similarity = 0.0f;
+    std::string status;
+    double total_latency_ms = 0.0;
+};
+
 struct AppConfig {
     int camera_id = 0;
     int width = 640;
     int height = 480;
     int target_fps = 60;
-    int detect_width = 400;       // Downscale width for YuNet (320/256 for Pi 3)
+    int detect_width = 400;       // Downscale width for YuNet (256 for Pi 3)
     float threshold = 0.60f;
     bool flip_horizontal = true;
     bool headless = false;

@@ -1,14 +1,14 @@
-# ⚡ Lightweight Native C++ Face Recognition Engine
+# ⚡ Lightweight Native C++ Face Recognition + ImGui Dashboard
 
-เวอร์ชัน **C++17 Native Cross-Platform** สำหรับงาน **Lightweight Edge Image Processing** ออกแบบมาเพื่อให้ทำงานได้เร็วที่สุด กินแรมน้อยที่สุด (< 80 MB) และไร้ความหน่วง (Zero-Copy Rendering + Lucas-Kanade Optical Flow 60 FPS) รองรับตั้งแต่ **Raspberry Pi 3, Raspberry Pi 5, บอร์ด SBC ยี่ห้ออื่น (Orange Pi / Jetson)** ไปจนถึง **Windows (`.exe`)**
+เวอร์ชัน **C++17 Native Cross-Platform + Dear ImGui Dashboard** ที่ทดแทนการทำงานของหน้าเว็บได้ครบ 100% โดยยังคงความเบาสูงสุด (**Zero-Copy GPU Texture, RAM < 100 MB, 60 FPS Delay-Compensated Optical Flow**) รองรับตั้งแต่ **Raspberry Pi 3, Raspberry Pi 5, บอร์ด SBC ยี่ห้ออื่น (Orange Pi / Jetson)** ไปจนถึง **Windows (`.exe`)**
 
 ---
 
-## ✨ จุดเด่นทางสถาปัตยกรรม (Architecture Highlights)
-* **True Multi-Threaded Pipeline:** แยกเธรดดึงภาพกล้อง (V4L2/DirectShow), เธรด AI Worker (YuNet + MobileFaceNet), และเธรดแสดงผลออกจากกัน 100% โดยไม่ติดข้อจำกัด GIL ของ Python
-* **Zero-Lag 60 FPS Tracking:** ใช้ Lucas-Kanade Sparse Optical Flow ติดตามใบหน้าในทุกเฟรมกล้อง (< 1.5 ms) ทำให้กรอบไหลติดใบหน้าเนียนตาเท่าความเร็วกล้อง
-* **Zero-Copy Native Display:** แสดงผลตรงผ่าน OpenCV HighGUI ไม่ต้องบีบอัด JPEG ส่งผ่าน HTTP และไม่ต้องเปิดเบราว์เซอร์
-* **100% SQLite Compatible:** ใช้ฐานข้อมูล `Antigravity/face_recognition.db` ร่วมกับฝั่ง Python/Web ได้ทันที
+## 🖥️ ฟีเจอร์ครบทุกแท็บใน Native Dashboard UI
+1. **Live Monitor:** ภาพสดจากกล้องบน GPU Texture พร้อมกรอบ **Delay-Compensated Optical Flow 60 FPS**, การ์ดสถานะบุคคลที่ตรวจพบล่าสุด และแถบประวัติการสแกนแบบเรียลไทม์
+2. **Register Face:** ลงทะเบียนใบหน้าบุคคลใหม่ผ่านกล้องสด (กรอกชื่อ, รหัสนักศึกษา, บทบาท แล้วกดปุ่ม Capture บันทึกลง SQLite ทันที)
+3. **Persons DB:** ตารางแสดงรายชื่อบุคคลทั้งหมดในระบบ พร้อมช่องค้นหา, จำนวนเวกเตอร์ใบหน้า, ปุ่ม Refresh และปุ่มลบรายชื่อ
+4. **Settings & Telemetry:** สไลเดอร์ปรับค่า `Threshold`, ปรับความกว้างภาพตรวจจับ `YuNet`, สลับกล้อง (`Camera ID`), สลับ Mirror Flip พร้อม **กราฟ FPS และ AI Latency แบบเรียลไทม์**
 
 ---
 
@@ -19,6 +19,7 @@ cd cpp
 chmod +x build_pi.sh
 ./build_pi.sh
 ```
+*(สคริปต์จะติดตั้ง `libopencv-dev`, `libsqlite3-dev`, `libglfw3-dev`, `libgl1-mesa-dev` และดึง Dear ImGui ผ่าน CMake ให้อัตโนมัติ)*
 
 ### สั่งรันโปรแกรม:
 * **สำหรับ Raspberry Pi 5 / PC / Jetson:**
@@ -30,16 +31,13 @@ chmod +x build_pi.sh
   ./build/face_recognition_native --pi3
   ```
 
-### (ทางเลือก) เปิดใช้งาน ONNX Runtime C++ สำหรับโมเดล INT8:
-ดาวน์โหลด ONNX Runtime C++ (`linux-aarch64` หรือ `linux-arm`) จาก [ONNX Runtime Releases](https://github.com/microsoft/onnxruntime/releases) แตกไฟล์วางที่ `cpp/onnxruntime/` แล้วรัน `./build_pi.sh` ระบบจะตรวจจับและเปิดโหมด **INT8 QDQ** ให้อัตโนมัติ
-
 ---
 
 ## 🪟 วิธี Build & รันบน Windows (Standalone `.exe`)
 
 1. ติดตั้ง [CMake](https://cmake.org/), [Visual Studio Build Tools](https://visualstudio.microsoft.com/), และแพ็กเกจผ่าน `vcpkg`:
    ```powershell
-   vcpkg install opencv4 sqlite3
+   vcpkg install opencv4 sqlite3 glfw3
    ```
 2. สั่ง Build ด้วย CMake:
    ```powershell
@@ -51,10 +49,3 @@ chmod +x build_pi.sh
    ```powershell
    .\build\Release\face_recognition_native.exe
    ```
-
----
-
-## ⌨️ คีย์ลัดขณะใช้งาน
-* **`q` หรือ `ESC`**: ออกจากโปรแกรม
-* **`r`**: โหลดข้อมูลใบหน้าจาก SQLite Database ใหม่ (Reload Cache)
-* **`f`**: สลับโหมดกลับภาพกระจก (Mirror Flip)

@@ -279,6 +279,100 @@ void FaceDatabase::logRecognition(const MatchResult& match,
     sqlite3_finalize(stmt);
 }
 
+std::vector<PersonSummary> FaceDatabase::listPersons() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<PersonSummary> list;
+    if (!db_) return list;
+
+    const char* sql = R"SQL(
+        SELECT p.id, p.name, COALESCE(p.student_id, ''), COALESCE(p.role, 'Student'),
+               COUNT(fe.id) AS emb_cnt, COALESCE(p.created_at, '')
+        FROM persons p
+        LEFT JOIN face_embeddings fe ON fe.person_id = p.id
+        GROUP BY p.id
+        ORDER BY p.id DESC;
+    )SQL";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) return list;
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        PersonSummary ps;
+        ps.id = sqlite3_column_int(stmt, 0);
+        const auto* n = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        const auto* s = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        const auto* r = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        ps.embedding_count = sqlite3_column_int(stmt, 4);
+        const auto* c = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+        ps.name = n ? n : "";
+        ps.student_id = s ? s : "";
+        ps.role = r ? r : "Student";
+        ps.created_at = c ? c : "";
+        list.push_back(std::move(ps));
+    }
+    sqlite3_finalize(stmt);
+    return list;
+}
+
+bool FaceDatabase::deletePerson(int person_id) {
+    bool ok = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!db_) return false;
+        const char* sql = "DELETE FROM persons WHERE id = ?1;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_int(stmt, 1, person_id);
+            ok = (sqlite3_step(stmt) == SQLITE_DONE);
+            sqlite3_finalize(stmt);
+        }
+    }
+    if (ok) {
+        reloadCache();
+    }
+    return ok;
+}
+
+std::vector<RecognitionLogEntry> FaceDatabase::getRecentLogs(int limit) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<RecognitionLogEntry> logs;
+    if (!db_) return logs;
+
+    const char* sql = R"SQL(
+        SELECT id, COALESCE(timestamp, ''), COALESCE(matched_name, 'Unknown'),
+               similarity_score, COALESCE(status, 'UNKNOWN'), total_latency_ms
+        FROM recognition_logs
+        ORDER BY id DESC
+        LIMIT ?1;
+    )SQL";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK) return logs;
+    sqlite3_bind_int(stmt, 1, limit);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        RecognitionLogEntry entry;
+        entry.id = sqlite3_column_int(stmt, 0);
+        const auto* ts = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        const auto* nm = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        entry.similarity = static_cast<float>(sqlite3_column_double(stmt, 3));
+        const auto* st = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        entry.total_latency_ms = sqlite3_column_double(stmt, 5);
+        entry.timestamp = ts ? ts : "";
+        entry.matched_name = nm ? nm : "Unknown";
+        entry.status = st ? st : "UNKNOWN";
+        logs.push_back(std::move(entry));
+    }
+    sqlite3_finalize(stmt);
+    return logs;
+}
+
+bool FaceDatabase::clearLogs() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!db_) return false;
+    return sqlite3_exec(db_, "DELETE FROM recognition_logs;", nullptr, nullptr, nullptr) == SQLITE_OK;
+}
+
 int FaceDatabase::enrolledPersonCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return unique_person_count_;

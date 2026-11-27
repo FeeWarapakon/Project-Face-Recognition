@@ -34,12 +34,24 @@ public:
                     const std::vector<float>& embedding,
                     float confidence = 1.0f);
 
+    /** Returns all registered persons with their embedding counts. */
+    std::vector<PersonSummary> listPersons() const;
+
+    /** Deletes a person and all their embeddings, then reloads RAM cache. */
+    bool deletePerson(int person_id);
+
     /** Logs a recognition event into recognition_logs table. */
     void logRecognition(const MatchResult& match,
                         float threshold,
                         double detect_ms,
                         double embed_ms,
                         double match_ms);
+
+    /** Returns recent recognition logs for the Dashboard Sidebar. */
+    std::vector<RecognitionLogEntry> getRecentLogs(int limit = 25) const;
+
+    /** Clears all recognition logs. */
+    bool clearLogs();
 
     int enrolledPersonCount() const;
     int embeddingCount() const;

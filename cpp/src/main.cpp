@@ -3,6 +3,7 @@
 #include "face_recognizer.hpp"
 #include "face_tracker.hpp"
 #include "types.hpp"
+#include "ui_dashboard.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -82,7 +83,6 @@ static fr::AppConfig parseArgs(int argc, char** argv) {
         }
     }
 
-    // Auto-resolve model_dir and db_path when launched from repo root or cpp/build
     if (!fs::exists(fs::path(cfg.model_dir) / "face_detection_yunet_2023mar.onnx")) {
         for (const auto& probe : {"Antigravity", "../Antigravity", "../../Antigravity", "."}) {
             if (fs::exists(fs::path(probe) / "face_detection_yunet_2023mar.onnx")) {
@@ -97,14 +97,14 @@ static fr::AppConfig parseArgs(int argc, char** argv) {
     return cfg;
 }
 
-static cv::VideoCapture openCamera(const fr::AppConfig& cfg) {
+static cv::VideoCapture openCamera(const fr::AppConfig& cfg, int cam_id) {
     cv::VideoCapture cap;
 #ifdef _WIN32
-    cap.open(cfg.camera_id, cv::CAP_DSHOW);
-    if (!cap.isOpened()) cap.open(cfg.camera_id);
+    cap.open(cam_id, cv::CAP_DSHOW);
+    if (!cap.isOpened()) cap.open(cam_id);
 #else
-    cap.open(cfg.camera_id, cv::CAP_V4L2);
-    if (!cap.isOpened()) cap.open(cfg.camera_id);
+    cap.open(cam_id, cv::CAP_V4L2);
+    if (!cap.isOpened()) cap.open(cam_id);
 #endif
     if (cap.isOpened()) {
         cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
@@ -120,8 +120,8 @@ int main(int argc, char** argv) {
     fr::AppConfig cfg = parseArgs(argc, argv);
 
     std::cout << "====================================================================\n";
-    std::cout << "  Lightweight Native C++ Face Recognition (Edge AI Optimized)\n";
-    std::cout << "  Target: Raspberry Pi 3 / Pi 5 / SBC / Windows (Zero-Copy Native)\n";
+    std::cout << "  Lightweight Native C++ Face Recognition + ImGui Dashboard\n";
+    std::cout << "  Target: Raspberry Pi 3 / Pi 5 / SBC / Windows (Zero-Copy OpenGL)\n";
     std::cout << "====================================================================\n";
 
     // 1. Initialize Detector, Recognizer, Database
@@ -147,24 +147,38 @@ int main(int argc, char** argv) {
     db.reloadCache();
 
     // 2. Open Camera
-    cv::VideoCapture cap = openCamera(cfg);
+    std::mutex cam_hw_mtx;
+    cv::VideoCapture cap = openCamera(cfg, cfg.camera_id);
     if (!cap.isOpened()) {
-        std::cerr << "[FATAL] Could not open camera ID " << cfg.camera_id << "\n";
-        return 1;
+        std::cerr << "[WARN] Could not open camera ID " << cfg.camera_id << " at startup. You can switch camera in Settings.\n";
+    } else {
+        std::cout << "[OK] Camera opened: "
+                  << static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH)) << "x"
+                  << static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT))
+                  << " | Detect Width: " << cfg.detect_width << "px"
+                  << (cfg.pi3_mode ? " [Pi 3 Mode]" : "") << "\n";
     }
 
-    const int actual_w = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-    const int actual_h = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-    std::cout << "[OK] Camera opened: " << actual_w << "x" << actual_h
-              << " | Detect Width: " << cfg.detect_width
-              << "px | Threshold: " << cfg.threshold
-              << (cfg.pi3_mode ? " [Pi 3 Mode]" : "") << "\n";
+    // 3. Initialize Native Dashboard UI (Dear ImGui + OpenGL)
+    fr::NativeDashboardUI ui;
+    bool ui_active = false;
     if (!cfg.headless) {
-        std::cout << "[i] Controls: [q / ESC] Quit | [r] Reload DB | [f] Toggle Flip\n";
+        const std::string title = "Edge Face Recognition — C++17 Native Dashboard (" + recognizer.backendName() + ")";
+        ui_active = ui.init(title, cfg.pi3_mode ? 960 : 1240, cfg.pi3_mode ? 600 : 740);
+        if (!ui_active) {
+            std::cerr << "[WARN] Native GUI could not open. Switching to headless mode.\n";
+            cfg.headless = true;
+        }
     }
 
     // Shared State for Decoupled Multi-Threaded Pipeline
     std::atomic<bool> running{true};
+    std::atomic<float> live_threshold{cfg.threshold};
+    std::atomic<int> live_detect_width{cfg.detect_width};
+    std::atomic<bool> live_flip{cfg.flip_horizontal};
+
+    // Mutex protecting AI models during live enrollment
+    std::mutex ai_engine_mtx;
 
     // Camera Thread -> Main Thread
     std::mutex cam_mtx;
@@ -186,13 +200,20 @@ int main(int argc, char** argv) {
     uint64_t ai_result_frame_seq = 0;
     double ai_total_ms = 0.0;
 
-    // 3. Dedicated Camera Capture Thread (Zero I/O Blocking)
+    // 4. Dedicated Camera Capture Thread (Zero I/O Blocking)
     std::thread cam_thread([&]() {
         auto prev_t = Clock::now();
         while (running.load()) {
             cv::Mat frame;
-            if (cap.read(frame) && !frame.empty()) {
-                if (cfg.flip_horizontal) {
+            bool ok = false;
+            {
+                std::lock_guard<std::mutex> hw_lock(cam_hw_mtx);
+                if (cap.isOpened()) {
+                    ok = cap.read(frame) && !frame.empty();
+                }
+            }
+            if (ok) {
+                if (live_flip.load()) {
                     cv::flip(frame, frame, 1);
                 }
                 const auto now = Clock::now();
@@ -207,12 +228,12 @@ int main(int argc, char** argv) {
                                      ? (0.85 * cam_fps_smooth + 0.15 * inst_fps)
                                      : inst_fps;
             } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
         }
     });
 
-    // 4. Dedicated AI Inference Worker Thread (YuNet + Cached MobileFaceNet INT8 + SQLite)
+    // 5. Dedicated AI Inference Worker Thread (YuNet + Cached MobileFaceNet INT8 + SQLite)
     std::thread ai_thread([&]() {
         struct RecCacheEntry {
             cv::Rect box;
@@ -247,11 +268,19 @@ int main(int argc, char** argv) {
                 ai_has_frame = false;
             }
 
+            const float cur_thr = live_threshold.load();
+            const int cur_det_w = live_detect_width.load();
             const auto now_ai = Clock::now();
-            const auto t0 = Clock::now();
-            auto dets = detector.detect(work_frame, cfg.detect_width);
-            const auto t1 = Clock::now();
-            const double detect_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+            std::vector<fr::FaceDetection> dets;
+            double detect_ms = 0.0;
+            {
+                std::lock_guard<std::mutex> eng_lock(ai_engine_mtx);
+                const auto t0 = Clock::now();
+                dets = detector.detect(work_frame, cur_det_w);
+                const auto t1 = Clock::now();
+                detect_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            }
 
             std::vector<fr::TrackedFace> results;
             results.reserve(dets.size());
@@ -259,7 +288,6 @@ int main(int argc, char** argv) {
             double sum_match_ms = 0.0;
 
             for (const auto& det : dets) {
-                // Check if this face was already recognized recently (re-verify every 2.0s)
                 int cache_idx = -1;
                 float best_iou = 0.0f;
                 for (size_t c = 0; c < rec_cache.size(); ++c) {
@@ -283,21 +311,24 @@ int main(int argc, char** argv) {
                     rec_cache[cache_idx].box = det.box;
                     rec_cache[cache_idx].last_seen = now_ai;
                 } else {
-                    const auto te0 = Clock::now();
-                    cv::Mat aligned;
-                    if (det.has_landmarks) {
-                        aligned = fr::FaceDetector::alignFace5Pts(work_frame, det.landmarks, 112);
-                    } else {
-                        cv::resize(work_frame(det.box), aligned, cv::Size(112, 112));
+                    std::vector<float> emb;
+                    {
+                        std::lock_guard<std::mutex> eng_lock(ai_engine_mtx);
+                        const auto te0 = Clock::now();
+                        cv::Mat aligned;
+                        if (det.has_landmarks) {
+                            aligned = fr::FaceDetector::alignFace5Pts(work_frame, det.landmarks, 112);
+                        } else {
+                            cv::resize(work_frame(det.box), aligned, cv::Size(112, 112));
+                        }
+                        emb = recognizer.extractEmbedding(aligned);
+                        const auto te1 = Clock::now();
+                        embed_ms = std::chrono::duration<double, std::milli>(te1 - te0).count();
                     }
-                    auto emb = recognizer.extractEmbedding(aligned);
-                    const auto te1 = Clock::now();
 
                     const auto tm0 = Clock::now();
-                    match = db.findMatch(emb, cfg.threshold);
+                    match = db.findMatch(emb, cur_thr);
                     const auto tm1 = Clock::now();
-
-                    embed_ms = std::chrono::duration<double, std::milli>(te1 - te0).count();
                     match_ms = std::chrono::duration<double, std::milli>(tm1 - tm0).count();
                     sum_embed_ms += embed_ms;
                     sum_match_ms += match_ms;
@@ -324,7 +355,6 @@ int main(int argc, char** argv) {
                 results.push_back(std::move(tf));
             }
 
-            // Prune stale cache entries (> 2.5s unseen)
             rec_cache.erase(
                 std::remove_if(rec_cache.begin(), rec_cache.end(), [&](const RecCacheEntry& e) {
                     return std::chrono::duration<double>(now_ai - e.last_seen).count() > 2.5;
@@ -342,133 +372,202 @@ int main(int argc, char** argv) {
         }
     });
 
-    // 5. Main Native Display & Zero-Lag Optical Flow Loop (Full Camera FPS)
-    fr::OpticalFlowFaceTracker tracker(0.55);
+    // 6. Wire Dashboard Callbacks (Live Enrollment & Camera Switching)
+    fr::DashboardCallbacks callbacks;
+
+    callbacks.on_enroll = [&](const std::string& name,
+                              const std::string& student_id,
+                              const std::string& role,
+                              std::string& out_msg) -> bool {
+        cv::Mat raw_snap;
+        {
+            std::lock_guard<std::mutex> lock(cam_mtx);
+            if (latest_cam_frame.empty()) {
+                out_msg = "[ERROR] No camera frame available.";
+                return false;
+            }
+            raw_snap = latest_cam_frame.clone();
+        }
+
+        std::vector<fr::FaceDetection> dets;
+        std::vector<float> emb;
+        float conf = 1.0f;
+        {
+            std::lock_guard<std::mutex> eng_lock(ai_engine_mtx);
+            dets = detector.detect(raw_snap, std::max(400, live_detect_width.load()));
+            if (dets.empty()) {
+                out_msg = "[ERROR] No face detected. Please face the camera clearly.";
+                return false;
+            }
+            // Pick largest face in frame
+            const auto& best_det = *std::max_element(dets.begin(), dets.end(),
+                [](const fr::FaceDetection& a, const fr::FaceDetection& b) {
+                    return a.box.area() < b.box.area();
+                });
+            conf = best_det.confidence;
+            cv::Mat aligned = best_det.has_landmarks
+                                  ? fr::FaceDetector::alignFace5Pts(raw_snap, best_det.landmarks, 112)
+                                  : [&]() {
+                                        cv::Mat r;
+                                        cv::resize(raw_snap(best_det.box), r, cv::Size(112, 112));
+                                        return r;
+                                    }();
+            emb = recognizer.extractEmbedding(aligned);
+        }
+
+        if (emb.empty()) {
+            out_msg = "[ERROR] Failed to extract face embedding.";
+            return false;
+        }
+        if (db.enrollFace(name, student_id, role, emb, conf)) {
+            out_msg = "[OK] Enrolled '" + name + "' successfully! (Total vectors: " +
+                      std::to_string(db.embeddingCount()) + ")";
+            return true;
+        }
+        out_msg = "[ERROR] Database insert failed.";
+        return false;
+    };
+
+    callbacks.on_switch_camera = [&](int new_cam_id, std::string& out_msg) -> bool {
+        cv::VideoCapture new_cap = openCamera(cfg, new_cam_id);
+        if (!new_cap.isOpened()) {
+            out_msg = "[ERROR] Camera ID " + std::to_string(new_cam_id) + " not available.";
+            return false;
+        }
+        {
+            std::lock_guard<std::mutex> hw_lock(cam_hw_mtx);
+            cap.release();
+            cap = std::move(new_cap);
+            cfg.camera_id = new_cam_id;
+        }
+        out_msg = "[OK] Switched to Camera ID " + std::to_string(new_cam_id);
+        return true;
+    };
+
+    // 7. Main Zero-Copy Render & Delay-Compensated Optical Flow Loop (60 FPS)
+    fr::OpticalFlowFaceTracker tracker(0.60);
     uint64_t last_cam_seq = 0;
     uint64_t last_ai_seq = 0;
     double disp_fps_smooth = 0.0;
     auto prev_disp_t = Clock::now();
     std::unordered_map<std::string, Clock::time_point> last_log_time;
 
-    const std::string win_name = "Lightweight Native C++ Face Recognition (" + recognizer.backendName() + ")";
-    if (!cfg.headless) {
-        cv::namedWindow(win_name, cv::WINDOW_NORMAL);
-    }
+    cv::Mat last_rendered_frame;
+    std::vector<fr::TrackedFace> active_faces;
+    double cur_cam_fps = 0.0;
+    double cur_ai_ms = 0.0;
 
     while (running.load()) {
+        if (ui_active && ui.shouldClose()) {
+            running.store(false);
+            break;
+        }
+
+        // Sync live settings edited via UI sliders
+        live_threshold.store(cfg.threshold);
+        live_detect_width.store(cfg.detect_width);
+        live_flip.store(cfg.flip_horizontal);
+
         cv::Mat frame;
-        double cur_cam_fps = 0.0;
         uint64_t cur_seq = 0;
         {
             std::lock_guard<std::mutex> lock(cam_mtx);
-            if (cam_seq == last_cam_seq || latest_cam_frame.empty()) {
-                // Wait briefly for next hardware frame
-            } else {
+            if (cam_seq != last_cam_seq && !latest_cam_frame.empty()) {
                 frame = latest_cam_frame.clone();
                 cur_cam_fps = cam_fps_smooth;
                 cur_seq = cam_seq;
             }
         }
 
-        if (frame.empty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
-        }
-        last_cam_seq = cur_seq;
+        if (!frame.empty()) {
+            last_cam_seq = cur_seq;
 
-        // Push latest frame (with exact sequence tag) to AI worker (non-blocking)
-        {
-            std::lock_guard<std::mutex> lock(ai_in_mtx);
-            ai_pending_frame = frame.clone();
-            ai_pending_seq = cur_seq;
-            ai_has_frame = true;
-        }
-        ai_in_cv.notify_one();
-
-        // Fetch latest AI results (with originating frame_seq for Delay Compensation)
-        std::vector<fr::TrackedFace> ai_faces;
-        bool has_new_ai = false;
-        uint64_t res_frame_seq = cur_seq;
-        double cur_ai_ms = 0.0;
-        {
-            std::lock_guard<std::mutex> lock(ai_out_mtx);
-            cur_ai_ms = ai_total_ms;
-            if (ai_result_seq != last_ai_seq) {
-                ai_faces = ai_latest_faces;
-                last_ai_seq = ai_result_seq;
-                res_frame_seq = ai_result_frame_seq;
-                has_new_ai = true;
+            // Push latest frame (with exact sequence tag) to AI worker
+            {
+                std::lock_guard<std::mutex> lock(ai_in_mtx);
+                ai_pending_frame = frame.clone();
+                ai_pending_seq = cur_seq;
+                ai_has_frame = true;
             }
-        }
+            ai_in_cv.notify_one();
 
-        // Update Delay-Compensated Optical Flow Tracker on EVERY camera frame (< 1.5 ms)
-        auto active_faces = tracker.updateFrame(frame, cur_seq, ai_faces, res_frame_seq, has_new_ai);
-
-        // Compute Display FPS
-        const auto now = Clock::now();
-        const double dt = std::max(1e-5, std::chrono::duration<double>(now - prev_disp_t).count());
-        prev_disp_t = now;
-        const double inst_disp_fps = 1.0 / dt;
-        disp_fps_smooth = (disp_fps_smooth > 0.0)
-                              ? (0.85 * disp_fps_smooth + 0.15 * inst_disp_fps)
-                              : inst_disp_fps;
-
-        // Draw Bounding Boxes, 5 Landmarks & Debounced SQLite Logging
-        for (const auto& f : active_faces) {
-            const bool is_known = (f.match.status == "KNOWN");
-            const cv::Scalar box_color = is_known ? cv::Scalar(0, 230, 0) : cv::Scalar(0, 165, 255);
-            const cv::Scalar bg_color = is_known ? cv::Scalar(0, 150, 0) : cv::Scalar(0, 110, 190);
-
-            cv::rectangle(frame, f.box, box_color, 2);
-
-            if (f.has_landmarks) {
-                for (const auto& lm : f.landmarks) {
-                    cv::circle(frame, lm, 2, cv::Scalar(0, 255, 255), -1);
+            // Fetch latest AI results (with originating frame_seq for Delay Compensation)
+            std::vector<fr::TrackedFace> ai_faces;
+            bool has_new_ai = false;
+            uint64_t res_frame_seq = cur_seq;
+            {
+                std::lock_guard<std::mutex> lock(ai_out_mtx);
+                cur_ai_ms = ai_total_ms;
+                if (ai_result_seq != last_ai_seq) {
+                    ai_faces = ai_latest_faces;
+                    last_ai_seq = ai_result_seq;
+                    res_frame_seq = ai_result_frame_seq;
+                    has_new_ai = true;
                 }
             }
 
-            std::ostringstream lbl;
-            lbl << f.match.name << " (" << std::fixed << std::setprecision(2) << f.match.similarity << ")";
-            const std::string label_str = lbl.str();
+            // Delay-Compensated Optical Flow Tracking on EVERY camera frame (< 1.5 ms)
+            active_faces = tracker.updateFrame(frame, cur_seq, ai_faces, res_frame_seq, has_new_ai);
 
-            const int banner_h = 24;
-            const int bg_w = std::max(140, static_cast<int>(label_str.size()) * 9);
-            const int y_top = std::max(0, f.box.y - banner_h);
-            cv::rectangle(frame, cv::Rect(f.box.x, y_top, bg_w, banner_h), bg_color, -1);
-            cv::putText(frame, label_str, cv::Point(f.box.x + 4, y_top + 17),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.48, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+            const auto now = Clock::now();
+            const double dt = std::max(1e-5, std::chrono::duration<double>(now - prev_disp_t).count());
+            prev_disp_t = now;
+            const double inst_disp_fps = 1.0 / dt;
+            disp_fps_smooth = (disp_fps_smooth > 0.0)
+                                  ? (0.85 * disp_fps_smooth + 0.15 * inst_disp_fps)
+                                  : inst_disp_fps;
 
-            // Debounced DB logging (once every 5 seconds per person)
-            auto it = last_log_time.find(f.match.name);
-            if (it == last_log_time.end() ||
-                std::chrono::duration<double>(now - it->second).count() > 5.0) {
-                db.logRecognition(f.match, cfg.threshold, f.detect_ms, f.embed_ms, f.match_ms);
-                last_log_time[f.match.name] = now;
+            // Draw Bounding Boxes, 5 Landmarks & Debounced SQLite Logging
+            for (const auto& f : active_faces) {
+                const bool is_known = (f.match.status == "KNOWN");
+                const cv::Scalar box_color = is_known ? cv::Scalar(0, 230, 0) : cv::Scalar(0, 165, 255);
+                const cv::Scalar bg_color = is_known ? cv::Scalar(0, 150, 0) : cv::Scalar(0, 110, 190);
+
+                cv::rectangle(frame, f.box, box_color, 2);
+
+                if (f.has_landmarks) {
+                    for (const auto& lm : f.landmarks) {
+                        cv::circle(frame, lm, 2, cv::Scalar(0, 255, 255), -1);
+                    }
+                }
+
+                std::ostringstream lbl;
+                lbl << f.match.name << " (" << std::fixed << std::setprecision(2) << f.match.similarity << ")";
+                const std::string label_str = lbl.str();
+
+                const int banner_h = 22;
+                const int bg_w = std::max(130, static_cast<int>(label_str.size()) * 9);
+                const int y_top = std::max(0, f.box.y - banner_h);
+                cv::rectangle(frame, cv::Rect(f.box.x, y_top, bg_w, banner_h), bg_color, -1);
+                cv::putText(frame, label_str, cv::Point(f.box.x + 4, y_top + 16),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.46, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+
+                // Debounced DB logging (once every 5 seconds per person)
+                auto it = last_log_time.find(f.match.name);
+                if (it == last_log_time.end() ||
+                    std::chrono::duration<double>(now - it->second).count() > 5.0) {
+                    db.logRecognition(f.match, cfg.threshold, f.detect_ms, f.embed_ms, f.match_ms);
+                    last_log_time[f.match.name] = now;
+                }
             }
+
+            last_rendered_frame = std::move(frame);
+        } else if (!ui_active) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
 
-        // Top HUD Bar
-        cv::rectangle(frame, cv::Rect(0, 0, frame.cols, 28), cv::Scalar(18, 18, 18), -1);
-        cv::line(frame, cv::Point(0, 28), cv::Point(frame.cols, 28), cv::Scalar(0, 180, 255), 1);
-        std::ostringstream hud;
-        hud << "C++ Native | Cam:" << std::fixed << std::setprecision(1) << cur_cam_fps
-            << " | Disp:" << disp_fps_smooth
-            << " FPS | AI:" << cur_ai_ms
-            << "ms | DB:" << db.enrolledPersonCount()
-            << (recognizer.isInt8() ? " | INT8" : " | FP32");
-        cv::putText(frame, hud.str(), cv::Point(8, 19),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
+        if (ui_active) {
+            fr::TelemetrySnapshot tel;
+            tel.cam_fps = cur_cam_fps;
+            tel.disp_fps = disp_fps_smooth;
+            tel.ai_ms = cur_ai_ms;
+            tel.frame_w = last_rendered_frame.empty() ? cfg.width : last_rendered_frame.cols;
+            tel.frame_h = last_rendered_frame.empty() ? cfg.height : last_rendered_frame.rows;
+            tel.is_int8 = recognizer.isInt8();
+            tel.backend_name = recognizer.backendName();
+            tel.model_name = recognizer.modelName();
 
-        if (!cfg.headless) {
-            cv::imshow(win_name, frame);
-            const int key = cv::waitKey(1) & 0xFF;
-            if (key == 'q' || key == 27) {
-                running.store(false);
-            } else if (key == 'r') {
-                db.reloadCache();
-            } else if (key == 'f') {
-                cfg.flip_horizontal = !cfg.flip_horizontal;
-            }
+            ui.renderFrame(last_rendered_frame, active_faces, tel, cfg, db, callbacks);
         }
     }
 
@@ -477,9 +576,12 @@ int main(int argc, char** argv) {
     ai_in_cv.notify_all();
     if (cam_thread.joinable()) cam_thread.join();
     if (ai_thread.joinable()) ai_thread.join();
-    cap.release();
-    if (!cfg.headless) cv::destroyAllWindows();
+    {
+        std::lock_guard<std::mutex> hw_lock(cam_hw_mtx);
+        cap.release();
+    }
+    ui.shutdown();
 
-    std::cout << "[OK] Native C++ Face Recognition exited cleanly.\n";
+    std::cout << "[OK] Native C++ Face Recognition Dashboard exited cleanly.\n";
     return 0;
 }
