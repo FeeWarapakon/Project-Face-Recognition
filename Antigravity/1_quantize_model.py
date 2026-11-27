@@ -142,6 +142,7 @@ def quantize_mobilefacenet(
 
     # ดำเนินการ Pre-processing (Shape Inference & Optimization) ก่อน Quantize
     preprocessed_model = "mobilefacenet_preprocessed.onnx"
+    converted_opset_model = "mobilefacenet_opset13.onnx"
     model_to_quantize = input_model
     try:
         print("[*] กำลังทำ ONNX Shape Inference & Pre-processing...")
@@ -152,6 +153,20 @@ def quantize_mobilefacenet(
     except Exception as e:
         print(f"[!] ข้ามขั้นตอน Pre-processing: {e}")
         model_to_quantize = input_model
+
+    # ตรวจสอบ Opset Version (Opset 13+ จำเป็นสำหรับ per-channel QDQ DequantizeLinear)
+    try:
+        loaded_model = onnx.load(model_to_quantize)
+        current_opset = next((op.version for op in loaded_model.opset_import if op.domain == "" or op.domain == "ai.onnx"), 11)
+        if current_opset < 13:
+            print(f"[*] อัปเกรด Opset จาก {current_opset} เป็น 13 เพื่อรองรับ INT8 Per-channel QDQ...")
+            from onnx import version_converter
+            model_13 = version_converter.convert_version(loaded_model, 13)
+            onnx.save(model_13, converted_opset_model)
+            model_to_quantize = converted_opset_model
+            print("[✓] อัปเกรด Opset เป็น 13 สำเร็จ")
+    except Exception as e:
+        print(f"[!] ข้ามขั้นตอน Opset Conversion: {e}")
 
     reader = FaceCalibrationDataReader(model_path=model_to_quantize, image_dir=calib_dir)
 
@@ -167,11 +182,12 @@ def quantize_mobilefacenet(
     )
 
     # ลบไฟล์ชั่วคราว
-    if os.path.exists(preprocessed_model):
-        try:
-            os.remove(preprocessed_model)
-        except Exception:
-            pass
+    for tmp in [preprocessed_model, converted_opset_model]:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
 
     size_fp32 = os.path.getsize(input_model) / (1024 * 1024)
     size_int8 = os.path.getsize(output_model) / (1024 * 1024)
