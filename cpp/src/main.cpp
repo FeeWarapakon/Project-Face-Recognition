@@ -444,6 +444,34 @@ int main(int argc, char** argv) {
         return true;
     };
 
+    callbacks.on_change_resolution = [&](int new_w, int new_h, std::string& out_msg) -> bool {
+        fr::AppConfig next_cfg = cfg;
+        next_cfg.width = new_w;
+        next_cfg.height = new_h;
+
+        int actual_w = new_w;
+        int actual_h = new_h;
+        {
+            std::lock_guard<std::mutex> hw_lock(cam_hw_mtx);
+            // Reopen camera with requested resolution (most reliable for Linux V4L2 & Windows DShow)
+            cap.release();
+            cv::VideoCapture new_cap = openCamera(next_cfg, cfg.camera_id);
+            if (!new_cap.isOpened()) {
+                // Fallback to previous resolution if unsupported
+                cap = openCamera(cfg, cfg.camera_id);
+                out_msg = "[ERROR] Failed to apply " + std::to_string(new_w) + "x" + std::to_string(new_h);
+                return false;
+            }
+            actual_w = static_cast<int>(new_cap.get(cv::CAP_PROP_FRAME_WIDTH));
+            actual_h = static_cast<int>(new_cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+            cap = std::move(new_cap);
+            cfg.width = actual_w > 0 ? actual_w : new_w;
+            cfg.height = actual_h > 0 ? actual_h : new_h;
+        }
+        out_msg = "[OK] Resolution set to " + std::to_string(cfg.width) + "x" + std::to_string(cfg.height);
+        return true;
+    };
+
     // 7. Main Zero-Copy Render & Delay-Compensated Optical Flow Loop (60 FPS)
     fr::OpticalFlowFaceTracker tracker(0.60);
     uint64_t last_cam_seq = 0;

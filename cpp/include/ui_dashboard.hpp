@@ -31,6 +31,9 @@ struct DashboardCallbacks {
 
     // Called when user clicks "Switch Camera" on Settings tab
     std::function<bool(int new_camera_id, std::string& out_message)> on_switch_camera;
+
+    // Called when user clicks "Apply Resolution" on Settings tab
+    std::function<bool(int new_width, int new_height, std::string& out_message)> on_change_resolution;
 };
 
 /**
@@ -90,6 +93,8 @@ private:
 
     char search_buf_[128] = "";
     int pending_cam_id_ = 0;
+    int selected_res_idx_ = 2; // Default 640x480
+    bool res_idx_initialized_ = false;
     std::string settings_status_msg_;
 
     // Cached DB lists for smooth 60 FPS UI without querying SQLite every frame

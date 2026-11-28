@@ -446,6 +446,39 @@ void NativeDashboardUI::renderSettingsTab(const TelemetrySnapshot& telemetry,
 
     ImGui::Spacing();
     ImGui::Separator();
+    ImGui::Text("Camera Resolution:");
+    static const char* kResLabels[] = {
+        "320 x 240  (QVGA - Pi 3 Ultra Fast)",
+        "480 x 360  (Balanced Low)",
+        "640 x 480  (VGA - Recommended)",
+        "800 x 600  (SVGA)",
+        "1280 x 720 (720p HD)",
+        "1920 x 1080 (1080p Full HD)"
+    };
+    static const int kResW[] = {320, 480, 640, 800, 1280, 1920};
+    static const int kResH[] = {240, 360, 480, 600, 720,  1080};
+
+    if (!res_idx_initialized_) {
+        for (int i = 0; i < IM_ARRAYSIZE(kResW); ++i) {
+            if (cfg.width == kResW[i] && cfg.height == kResH[i]) {
+                selected_res_idx_ = i;
+                break;
+            }
+        }
+        pending_cam_id_ = cfg.camera_id;
+        res_idx_initialized_ = true;
+    }
+
+    ImGui::SetNextItemWidth(260.0f);
+    ImGui::Combo("##ResCombo", &selected_res_idx_, kResLabels, IM_ARRAYSIZE(kResLabels));
+    ImGui::SameLine();
+    if (ImGui::Button("Apply Resolution", ImVec2(140, 0))) {
+        if (callbacks.on_change_resolution) {
+            callbacks.on_change_resolution(kResW[selected_res_idx_], kResH[selected_res_idx_], settings_status_msg_);
+        }
+    }
+
+    ImGui::Spacing();
     ImGui::Text("Switch Camera Device ID:");
     ImGui::SetNextItemWidth(120.0f);
     ImGui::InputInt("##CamID", &pending_cam_id_);
