@@ -67,6 +67,10 @@ struct AppConfig {
     int height = 480;
     int target_fps = 60;
     int detect_width = 400;       // Downscale width for YuNet (256 for Pi 3)
+    int detect_every_n_frames = 1;// Run AI detection every N camera frames (1 = every frame)
+    bool enable_predict = true;   // Enable Lucas-Kanade Optical Flow box prediction (60 FPS lock)
+    float predict_hold_sec = 0.60f; // Seconds to keep predicting/holding box between detections
+    float rec_interval_sec = 2.00f; // Seconds before re-verifying a known face embedding
     float threshold = 0.60f;
     bool flip_horizontal = true;
     bool headless = false;

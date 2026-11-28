@@ -175,6 +175,8 @@ int main(int argc, char** argv) {
     std::atomic<bool> running{true};
     std::atomic<float> live_threshold{cfg.threshold};
     std::atomic<int> live_detect_width{cfg.detect_width};
+    std::atomic<int> live_detect_every_n{cfg.detect_every_n_frames};
+    std::atomic<float> live_rec_interval_sec{cfg.rec_interval_sec};
     std::atomic<bool> live_flip{cfg.flip_horizontal};
 
     // Mutex protecting AI models during live enrollment
@@ -302,9 +304,10 @@ int main(int argc, char** argv) {
                 double embed_ms = 0.0;
                 double match_ms = 0.0;
 
+                const float cur_rec_interval = live_rec_interval_sec.load();
                 const bool can_reuse = (cache_idx >= 0 && best_iou >= 0.25f &&
                                         rec_cache[cache_idx].match.status == "KNOWN" &&
-                                        std::chrono::duration<double>(now_ai - rec_cache[cache_idx].last_rec).count() < 2.0);
+                                        std::chrono::duration<double>(now_ai - rec_cache[cache_idx].last_rec).count() < cur_rec_interval);
 
                 if (can_reuse) {
                     match = rec_cache[cache_idx].match;
@@ -494,6 +497,8 @@ int main(int argc, char** argv) {
         // Sync live settings edited via UI sliders
         live_threshold.store(cfg.threshold);
         live_detect_width.store(cfg.detect_width);
+        live_detect_every_n.store(std::max(1, cfg.detect_every_n_frames));
+        live_rec_interval_sec.store(cfg.rec_interval_sec);
         live_flip.store(cfg.flip_horizontal);
 
         cv::Mat frame;
@@ -510,14 +515,17 @@ int main(int argc, char** argv) {
         if (!frame.empty()) {
             last_cam_seq = cur_seq;
 
-            // Push latest frame (with exact sequence tag) to AI worker
-            {
-                std::lock_guard<std::mutex> lock(ai_in_mtx);
-                ai_pending_frame = frame.clone();
-                ai_pending_seq = cur_seq;
-                ai_has_frame = true;
+            // Push latest frame to AI worker only every N camera frames
+            const int det_every = live_detect_every_n.load();
+            if (det_every <= 1 || (cur_seq % static_cast<uint64_t>(det_every)) == 0) {
+                {
+                    std::lock_guard<std::mutex> lock(ai_in_mtx);
+                    ai_pending_frame = frame.clone();
+                    ai_pending_seq = cur_seq;
+                    ai_has_frame = true;
+                }
+                ai_in_cv.notify_one();
             }
-            ai_in_cv.notify_one();
 
             // Fetch latest AI results (with originating frame_seq for Delay Compensation)
             std::vector<fr::TrackedFace> ai_faces;
@@ -534,8 +542,11 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Delay-Compensated Optical Flow Tracking on EVERY camera frame (< 1.5 ms)
-            active_faces = tracker.updateFrame(frame, cur_seq, ai_faces, res_frame_seq, has_new_ai);
+            // Update Face Tracker (with live Optical Flow Prediction toggle & Hold Duration)
+            active_faces = tracker.updateFrame(
+                frame, cur_seq, ai_faces, res_frame_seq, has_new_ai,
+                cfg.enable_predict, static_cast<double>(cfg.predict_hold_sec)
+            );
 
             const auto now = Clock::now();
             const double dt = std::max(1e-5, std::chrono::duration<double>(now - prev_disp_t).count());

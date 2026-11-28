@@ -442,6 +442,28 @@ void NativeDashboardUI::renderSettingsTab(const TelemetrySnapshot& telemetry,
     ImGui::TextDisabled("Lower = faster AI on Pi 3 (256px) | Higher = farther faces (400-640px)");
 
     ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.20f, 0.88f, 1.00f, 1.0f), "AI INTERVAL & BOX PREDICTION");
+
+    ImGui::Text("Run AI Detection Every N Frames:");
+    ImGui::SliderInt("##DetectInterval", &cfg.detect_every_n_frames, 1, 30, "Every %d frame(s)");
+    ImGui::TextDisabled("1 = every frame | 5-15 = lower CPU load (great with Prediction ON)");
+
+    ImGui::Spacing();
+    ImGui::Checkbox("Enable Box Prediction (Optical Flow 60 FPS Lock)", &cfg.enable_predict);
+    ImGui::TextDisabled("ON = smooth 60FPS AR face lock | OFF = raw AI boxes only");
+
+    ImGui::Spacing();
+    ImGui::Text("Predict / Box Hold Duration (sec):");
+    ImGui::SliderFloat("##PredictHoldSec", &cfg.predict_hold_sec, 0.10f, 5.00f, "%.2f sec");
+    ImGui::TextDisabled("How long box stays locked/predicted between AI detections");
+
+    ImGui::Spacing();
+    ImGui::Text("Re-Verify Identity Interval (sec):");
+    ImGui::SliderFloat("##RecIntervalSec", &cfg.rec_interval_sec, 0.20f, 10.00f, "%.2f sec");
+    ImGui::TextDisabled("How often MobileFaceNet re-checks a known person's identity");
+
+    ImGui::Spacing();
     ImGui::Checkbox("Mirror Horizontal Flip", &cfg.flip_horizontal);
 
     ImGui::Spacing();

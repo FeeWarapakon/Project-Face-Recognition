@@ -35,7 +35,9 @@ public:
                                          uint64_t current_seq,
                                          const std::vector<TrackedFace>& ai_faces,
                                          uint64_t ai_frame_seq,
-                                         bool has_new_detections);
+                                         bool has_new_detections,
+                                         bool enable_predict = true,
+                                         double decay_sec_override = -1.0);
 
 private:
     struct FrameDelta {

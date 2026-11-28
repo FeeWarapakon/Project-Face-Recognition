@@ -77,16 +77,21 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
     uint64_t current_seq,
     const std::vector<TrackedFace>& ai_faces,
     uint64_t ai_frame_seq,
-    bool has_new_detections) {
+    bool has_new_detections,
+    bool enable_predict,
+    double decay_sec_override) {
+    const double active_decay = (decay_sec_override > 0.0) ? decay_sec_override : decay_sec_;
     const auto now = std::chrono::steady_clock::now();
     const float frame_w = static_cast<float>(frame_bgr.cols);
     const float frame_h = static_cast<float>(frame_bgr.rows);
 
     cv::Mat gray;
-    cv::cvtColor(frame_bgr, gray, cv::COLOR_BGR2GRAY);
+    if (enable_predict) {
+        cv::cvtColor(frame_bgr, gray, cv::COLOR_BGR2GRAY);
+    }
 
     // 1. Forward-Backward Lucas-Kanade Sparse Optical Flow on EVERY camera frame (< 1.5 ms)
-    if (!prev_gray_.empty() && prev_gray_.size() == gray.size() && !tracks_.empty()) {
+    if (enable_predict && !prev_gray_.empty() && prev_gray_.size() == gray.size() && !tracks_.empty()) {
         for (auto& [tid, trk] : tracks_) {
             float dx = 0.0f;
             float dy = 0.0f;
@@ -193,10 +198,12 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
                 // Forward-project raw_det_box from ai_frame_seq -> current_seq using this track's Optical Flow history!
                 float comp_dx = 0.0f;
                 float comp_dy = 0.0f;
-                for (const auto& fd : trk.delta_history) {
-                    if (fd.seq > ai_frame_seq && fd.seq <= current_seq) {
-                        comp_dx += fd.dx;
-                        comp_dy += fd.dy;
+                if (enable_predict) {
+                    for (const auto& fd : trk.delta_history) {
+                        if (fd.seq > ai_frame_seq && fd.seq <= current_seq) {
+                            comp_dx += fd.dx;
+                            comp_dy += fd.dy;
+                        }
                     }
                 }
 
@@ -220,8 +227,8 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
 
                 // Gently correct any tiny Optical Flow drift using the forward-projected AI box
                 // (No rubber-banding because best_compensated_box is already at current_seq!)
-                constexpr float pos_alpha = 0.35f;
-                constexpr float size_alpha = 0.45f;
+                const float pos_alpha = enable_predict ? 0.35f : 1.0f;
+                const float size_alpha = enable_predict ? 0.45f : 1.0f;
 
                 trk.smooth_box.x = pos_alpha * best_compensated_box.x + (1.0f - pos_alpha) * trk.smooth_box.x;
                 trk.smooth_box.y = pos_alpha * best_compensated_box.y + (1.0f - pos_alpha) * trk.smooth_box.y;
@@ -238,7 +245,7 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
                 );
 
                 // Also forward-project the 5 landmarks so eye/nose dots stick tightly too!
-                if (trk.face.has_landmarks) {
+                if (enable_predict && trk.face.has_landmarks) {
                     for (auto& lm : trk.face.landmarks) {
                         lm.x += best_comp_dx;
                         lm.y += best_comp_dy;
@@ -246,7 +253,12 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
                 }
 
                 trk.last_seen = now;
-                trk.flow_pts = extractFaceFeatures(gray, trk.smooth_box, trk.face.landmarks, trk.face.has_landmarks);
+                if (enable_predict) {
+                    trk.flow_pts = extractFaceFeatures(gray, trk.smooth_box, trk.face.landmarks, trk.face.has_landmarks);
+                } else {
+                    trk.flow_pts.clear();
+                    trk.delta_history.clear();
+                }
             } else {
                 const int tid = next_id_++;
                 used_ids.push_back(tid);
@@ -255,19 +267,25 @@ std::vector<TrackedFace> OpticalFlowFaceTracker::updateFrame(
                 new_trk.face.track_id = tid;
                 new_trk.smooth_box = raw_det_box;
                 new_trk.last_seen = now;
-                new_trk.flow_pts = extractFaceFeatures(gray, raw_det_box, det.landmarks, det.has_landmarks);
+                if (enable_predict) {
+                    new_trk.flow_pts = extractFaceFeatures(gray, raw_det_box, det.landmarks, det.has_landmarks);
+                }
                 tracks_[tid] = std::move(new_trk);
             }
         }
     }
 
-    prev_gray_ = std::move(gray);
+    if (enable_predict) {
+        prev_gray_ = std::move(gray);
+    } else {
+        prev_gray_.release();
+    }
 
     // 3. Prune expired tracks and return active faces
     std::vector<TrackedFace> active;
     for (auto it = tracks_.begin(); it != tracks_.end();) {
         const double elapsed = std::chrono::duration<double>(now - it->second.last_seen).count();
-        if (elapsed > decay_sec_) {
+        if (elapsed > active_decay) {
             it = tracks_.erase(it);
         } else {
             active.push_back(it->second.face);
