@@ -556,30 +556,30 @@ int main(int argc, char** argv) {
                                   ? (0.85 * disp_fps_smooth + 0.15 * inst_disp_fps)
                                   : inst_disp_fps;
 
-            // Draw Bounding Boxes, 5 Landmarks & Debounced SQLite Logging
+            // Draw Minimal Thin Corner Brackets Only (no text overlay on video — names shown in Log/Sidebar)
             for (const auto& f : active_faces) {
                 const bool is_known = (f.match.status == "KNOWN");
-                const cv::Scalar box_color = is_known ? cv::Scalar(0, 230, 0) : cv::Scalar(0, 165, 255);
-                const cv::Scalar bg_color = is_known ? cv::Scalar(0, 150, 0) : cv::Scalar(0, 110, 190);
+                const cv::Scalar box_color = is_known ? cv::Scalar(118, 230, 0) : cv::Scalar(0, 180, 255);
 
-                cv::rectangle(frame, f.box, box_color, 2);
+                const int x1 = f.box.x;
+                const int y1 = f.box.y;
+                const int x2 = f.box.x + f.box.width;
+                const int y2 = f.box.y + f.box.height;
+                const int corner_len = std::clamp(std::min(f.box.width, f.box.height) / 5, 10, 28);
+                constexpr int thin = 1;
 
-                if (f.has_landmarks) {
-                    for (const auto& lm : f.landmarks) {
-                        cv::circle(frame, lm, 2, cv::Scalar(0, 255, 255), -1);
-                    }
-                }
-
-                std::ostringstream lbl;
-                lbl << f.match.name << " (" << std::fixed << std::setprecision(2) << f.match.similarity << ")";
-                const std::string label_str = lbl.str();
-
-                const int banner_h = 22;
-                const int bg_w = std::max(130, static_cast<int>(label_str.size()) * 9);
-                const int y_top = std::max(0, f.box.y - banner_h);
-                cv::rectangle(frame, cv::Rect(f.box.x, y_top, bg_w, banner_h), bg_color, -1);
-                cv::putText(frame, label_str, cv::Point(f.box.x + 4, y_top + 16),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.46, cv::Scalar(255, 255, 255), 1, cv::LINE_AA);
+                // Top-left corner
+                cv::line(frame, cv::Point(x1, y1), cv::Point(x1 + corner_len, y1), box_color, thin, cv::LINE_AA);
+                cv::line(frame, cv::Point(x1, y1), cv::Point(x1, y1 + corner_len), box_color, thin, cv::LINE_AA);
+                // Top-right corner
+                cv::line(frame, cv::Point(x2, y1), cv::Point(x2 - corner_len, y1), box_color, thin, cv::LINE_AA);
+                cv::line(frame, cv::Point(x2, y1), cv::Point(x2, y1 + corner_len), box_color, thin, cv::LINE_AA);
+                // Bottom-left corner
+                cv::line(frame, cv::Point(x1, y2), cv::Point(x1 + corner_len, y2), box_color, thin, cv::LINE_AA);
+                cv::line(frame, cv::Point(x1, y2), cv::Point(x1, y2 - corner_len), box_color, thin, cv::LINE_AA);
+                // Bottom-right corner
+                cv::line(frame, cv::Point(x2, y2), cv::Point(x2 - corner_len, y2), box_color, thin, cv::LINE_AA);
+                cv::line(frame, cv::Point(x2, y2), cv::Point(x2, y2 - corner_len), box_color, thin, cv::LINE_AA);
 
                 // Debounced DB logging (once every 5 seconds per person)
                 auto it = last_log_time.find(f.match.name);
